@@ -14,6 +14,8 @@ final class BackendClient {
         let frameId: UUID?
         let reason: String?
         let alertStatus: String?
+        /// base64url delivery receipt only the sending phone can verify (SOSCore Receipts).
+        let receipt: String?
         /// The backend has the frame, or will never accept it: stop retrying.
         var terminal: Bool { ["accepted", "duplicate", "rejected"].contains(status) }
     }

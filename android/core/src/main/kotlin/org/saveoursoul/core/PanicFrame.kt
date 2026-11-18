@@ -8,7 +8,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 /** Emergency category, encoded as one byte. Order is part of the wire protocol. */
-enum class SosKind { GENERAL, MEDICAL, FIRE, VIOLENCE, ACCIDENT }
+enum class SosKind { GENERAL, MEDICAL, FIRE, VIOLENCE, ACCIDENT, LOST }
 
 object FrameFlags {
     const val HAS_LOCATION = 0x01

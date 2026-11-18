@@ -43,7 +43,8 @@ struct ContentView: View {
 
 private struct IdleSosView: View {
     @EnvironmentObject var engine: SosEngine
-    @State private var kind: SosKind = .general
+    // "Lost" first: being separated from the group is the most common emergency at Hajj.
+    @State private var kind: SosKind = .lost
     @State private var countdown: Int?
     @State private var pressing = false
 
@@ -53,7 +54,7 @@ private struct IdleSosView: View {
             Picker("Emergency", selection: $kind) {
                 ForEach(SosKind.allCases, id: \.self) { Text(String(describing: $0).capitalized).tag($0) }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
 
             ZStack {
                 Circle().fill(sosRed).frame(width: 240, height: 240)
@@ -143,6 +144,7 @@ private struct ChannelsView: View {
             Text("Channels").bold()
             row("Internet (Wi-Fi / cellular)", engine.internet)
             row("SMS", engine.sms)
+            row("Bluetooth relay (works in crowds, no internet needed)", engine.ble)
             row("Nearby phones (Bluetooth / Wi-Fi)", engine.mesh)
             if engine.pendingFrames > 0 { Text("\(engine.pendingFrames) signal(s) queued for delivery").font(.caption) }
             if engine.relayedForOthers > 0 { Text("Relayed \(engine.relayedForOthers) SOS signal(s) for people nearby").font(.caption) }

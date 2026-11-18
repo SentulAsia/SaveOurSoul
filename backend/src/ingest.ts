@@ -8,6 +8,7 @@ import {
   decodeFrame,
   fromBase64Url,
   kindName,
+  receiptFor,
   verifyFrame,
 } from "./protocol.ts";
 import type { Alert, AlertStatus, Store } from "./store.ts";
@@ -25,7 +26,14 @@ export interface IngestContext {
 }
 
 export type IngestResult =
-  | { status: "accepted" | "duplicate"; frameId: string; alertId: string; alertStatus: AlertStatus }
+  | {
+      status: "accepted" | "duplicate";
+      frameId: string;
+      alertId: string;
+      alertStatus: AlertStatus;
+      /** base64url delivery receipt the sending phone can verify (see receiptFor). */
+      receipt: string;
+    }
   | { status: "rejected"; frameId?: string; reason: string };
 
 export interface IngestOptions {
@@ -77,6 +85,7 @@ export class Ingestor {
       receivedAt: ctx.now,
     };
 
+    const receipt64 = receiptFor(frameId, device.secret).toString("base64url");
     let created = false;
     let changed = false;
     const outcome = this.store.transaction((): IngestResult => {
@@ -88,7 +97,13 @@ export class Ingestor {
       if (this.store.hasSignal(frameId)) {
         // Same frame via another channel/relay: record the path for diagnostics, nothing else changes.
         this.store.insertReceipt(receipt);
-        return { status: "duplicate", frameId, alertId: frame.alertId, alertStatus: this.store.getAlert(frame.alertId)!.status };
+        return {
+          status: "duplicate",
+          frameId,
+          alertId: frame.alertId,
+          alertStatus: this.store.getAlert(frame.alertId)!.status,
+          receipt: receipt64,
+        };
       }
 
       const isCancel = (frame.flags & Flags.CANCEL) !== 0;
@@ -129,7 +144,13 @@ export class Ingestor {
         this.store.setStatus(frame.alertId, "cancelled", ctx.now, { note: "cancelled by user" });
       }
       changed = true;
-      return { status: "accepted", frameId, alertId: frame.alertId, alertStatus: this.store.getAlert(frame.alertId)!.status };
+      return {
+        status: "accepted",
+        frameId,
+        alertId: frame.alertId,
+        alertStatus: this.store.getAlert(frame.alertId)!.status,
+        receipt: receipt64,
+      };
     });
 
     if (outcome.status === "accepted" && changed) {

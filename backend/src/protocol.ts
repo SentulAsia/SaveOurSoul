@@ -20,7 +20,8 @@ export const Flags = {
   TEST: 0x04,
 } as const;
 
-export const Kinds = ["general", "medical", "fire", "violence", "accident"] as const;
+/** Order is part of the wire protocol. "lost" (separated from the group) is the most common Hajj case. */
+export const Kinds = ["general", "medical", "fire", "violence", "accident", "lost"] as const;
 export type Kind = (typeof Kinds)[number];
 
 export const UNKNOWN_ACCURACY = 0xffff;
@@ -123,6 +124,22 @@ export function extractSmsFrames(text: string): string[] {
   const re = /SOS1:([A-Za-z0-9_-]{100,120})/g;
   for (const m of text.matchAll(re)) out.push(m[1]!);
   return out;
+}
+
+export const RECEIPT_LENGTH = 8;
+const RECEIPT_DOMAIN = Buffer.from("SOSACK1");
+
+/**
+ * Delivery receipt for a frame: HMAC(device secret, "SOSACK1" || frameId)[:8].
+ * Only the backend and the sending phone hold the secret, so when relays carry a receipt back
+ * over Bluetooth the victim's phone can tell a genuine "server has it" from a forged one that
+ * would silence its SOS.
+ */
+export function receiptFor(frameId: string, secret: Buffer): Buffer {
+  return createHmac("sha256", secret)
+    .update(Buffer.concat([RECEIPT_DOMAIN, uuidToBytes(frameId)]))
+    .digest()
+    .subarray(0, RECEIPT_LENGTH);
 }
 
 export function kindName(kind: number): Kind {

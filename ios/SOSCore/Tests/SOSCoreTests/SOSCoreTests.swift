@@ -9,7 +9,7 @@ private struct Vectors: Decodable {
         let frameId: UUID, alertId: UUID, deviceId: UUID
         let timestamp: UInt32, latE7: Int32, lonE7: Int32, accuracyM: UInt16, batteryPct: UInt8
     }
-    struct Vector: Decodable { let name: String; let frame: Frame; let base64url: String; let sms: String }
+    struct Vector: Decodable { let name: String; let frame: Frame; let base64url: String; let sms: String; let receipt: String }
     let secretHex: String
     let vectors: [Vector]
 }
@@ -48,6 +48,9 @@ final class PanicFrameTests: XCTestCase {
             XCTAssertEqual(try FrameCodec.decode(FrameCodec.fromBase64Url(v.base64url)), frame)
             XCTAssertTrue(FrameCodec.verify(bytes, signer: signer))
             XCTAssertLessThanOrEqual(v.sms.count, 160)
+            let receipt = try FrameCodec.fromBase64Url(v.receipt)
+            XCTAssertTrue(Receipts.verify(Ack(frameId: f.frameId, receipt: receipt), signer: signer), v.name)
+            XCTAssertFalse(Receipts.verify(Ack(frameId: UUID(), receipt: receipt), signer: signer))
         }
     }
 
@@ -114,5 +117,46 @@ final class RelayAndOutboxTests: XCTestCase {
         box.add(f, own: false)
         box.add(FrameCodec.withHops(f, 1), own: false)
         XCTAssertEqual(FrameCodec.hops(box.unconfirmed()[0].frame), 1)
+    }
+}
+
+final class BleProtocolTests: XCTestCase {
+    func testBeaconEncodings() {
+        let b = BleProtocol.Beacon(flags: BleProtocol.flagOwnSos | BleProtocol.flagHoldsFrames, digest: 0xABCDEF)
+        XCTAssertEqual(BleProtocol.Beacon.from(serviceData: b.serviceData()), b)
+        XCTAssertEqual(b.localName, "S15abcdef")
+        XCTAssertEqual(BleProtocol.Beacon.from(localName: b.localName), b)
+        XCTAssertNil(BleProtocol.Beacon.from(localName: "iPhone"))
+    }
+
+    func testAckRoundTripAndLedger() {
+        let acks = (0..<3).map { i in Ack(frameId: UUID(), receipt: Data((0..<8).map { UInt8($0 + i) })) }
+        XCTAssertEqual(Receipts.decode(Receipts.encode(acks)), acks)
+        let ledger = AckLedger(capacity: 2)
+        acks.forEach(ledger.add)
+        XCTAssertEqual(ledger.recent(10), [acks[2], acks[1]])
+    }
+
+    func testDigestOrderIndependent() {
+        let a = UUID(), b = UUID()
+        XCTAssertEqual(BleProtocol.digest([a, b]), BleProtocol.digest([b, a]))
+        XCTAssertNotEqual(BleProtocol.digest([a]), BleProtocol.digest([a, b]))
+    }
+
+    func testContactPolicy() {
+        let p = ContactPolicy(relayPullProbability: 0)
+        let victim = ContactPolicy.Local(holdsUndelivered: true, hasInternet: false)
+        let online = ContactPolicy.Local(holdsUndelivered: false, hasInternet: true)
+        let offline = ContactPolicy.Local(holdsUndelivered: false, hasInternet: false)
+        let onlinePeer = BleProtocol.Beacon(flags: BleProtocol.flagHasInternet, digest: 1)
+        let holder = BleProtocol.Beacon(flags: BleProtocol.flagHoldsFrames, digest: 2)
+        let victimPeer = BleProtocol.Beacon(flags: BleProtocol.flagOwnSos | BleProtocol.flagHoldsFrames, digest: 3)
+        XCTAssertEqual(p.decide(peerKey: "a", beacon: onlinePeer, rssi: -60, local: victim, now: 0), .push)
+        XCTAssertEqual(p.decide(peerKey: "b", beacon: holder, rssi: -60, local: online, now: 0), .pull)
+        XCTAssertEqual(p.decide(peerKey: "b", beacon: holder, rssi: -60, local: online, now: 10), .none) // cooldown
+        XCTAssertEqual(p.decide(peerKey: "c", beacon: victimPeer, rssi: -60, local: offline, now: 0), .pull)
+        XCTAssertEqual(p.decide(peerKey: "d", beacon: holder, rssi: -60, local: offline, now: 0), .none)
+        XCTAssertEqual(p.decide(peerKey: "e", beacon: holder, rssi: -99, local: online, now: 0), .none)
+        XCTAssertEqual(p.decide(peerKey: "f", beacon: nil, rssi: -60, local: online, now: 0), .pull)
     }
 }

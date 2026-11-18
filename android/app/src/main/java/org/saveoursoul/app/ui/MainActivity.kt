@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -122,7 +123,8 @@ private fun App(engine: SosEngine) {
 @Composable
 private fun IdleSos(state: SosEngine.State) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var kind by remember { mutableStateOf(SosKind.GENERAL) }
+    // "Lost" first: being separated from the group is the most common emergency at Hajj.
+    var kind by remember { mutableStateOf(SosKind.LOST) }
     var countdown by remember { mutableStateOf<Int?>(null) }
     var holdProgress by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
@@ -139,7 +141,7 @@ private fun IdleSos(state: SosEngine.State) {
     }
 
     Text("Hold the button to call for help", style = MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         SosKind.entries.forEach { k ->
             FilterChip(selected = k == kind, onClick = { kind = k }, label = { Text(k.name.lowercase().replaceFirstChar(Char::uppercase), fontSize = 11.sp) })
         }
@@ -216,7 +218,8 @@ private fun ChannelPanel(s: SosEngine.State) {
             Text("Channels", fontWeight = FontWeight.Bold)
             ChannelRow("Internet (Wi-Fi / cellular)", s.internet)
             ChannelRow("SMS", s.sms)
-            ChannelRow("Nearby phones (Bluetooth / Wi-Fi)", s.mesh)
+            ChannelRow("Bluetooth relay (works in crowds, no internet needed)", s.ble)
+            ChannelRow("Nearby phones (Bluetooth / Wi-Fi Direct)", s.mesh)
             if (s.pendingFrames > 0) Text("${s.pendingFrames} signal(s) queued for delivery", fontSize = 12.sp)
             if (s.relayedForOthers > 0) Text("Relayed ${s.relayedForOthers} SOS signal(s) for people nearby", fontSize = 12.sp)
         }

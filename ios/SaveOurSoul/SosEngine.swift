@@ -43,6 +43,7 @@ final class SosEngine: ObservableObject {
     @Published private(set) var internet = ChannelState()
     @Published private(set) var sms = ChannelState()
     @Published private(set) var mesh = ChannelState()
+    @Published private(set) var ble = ChannelState()
     @Published private(set) var responderStatus: String?
     @Published private(set) var lastFix: CLLocation?
     @Published private(set) var relayedForOthers = 0
@@ -62,6 +63,11 @@ final class SosEngine: ObservableObject {
     private lazy var relayPolicy = RelayPolicy(seen: seen)
     private let outbox: Outbox
     private let pathMonitor = NWPathMonitor()
+    private var online = false
+    private let ackLedger = AckLedger()
+    private let rotation = OutboxRotation()
+    /// Crowd-grade Bluetooth LE transport shared with Android (docs/BLE.md).
+    private lazy var bleTransport = BleTransport(host: self)
     private var activeLoop: Task<Void, Never>?
     private var flushing = false
     private var smsQueue: [SmsRequest] = []
@@ -73,14 +79,17 @@ final class SosEngine: ObservableObject {
         outbox = Outbox(url: dir.appendingPathComponent("outbox.json"))
         enrolled = credentials.isEnrolled
 
-        meshTransport.onPayload = { [weak self] id, data in self?.onPeerPayload(id, data) }
+        meshTransport.onPayload = { [weak self] id, data in self?.onFramesFromPeers(FrameCodec.split(data), source: "nearby:" + id) }
         meshTransport.framesToShare = { [weak self] in self?.outbox.unconfirmed().map(\.frame) ?? [] }
         meshTransport.onPeersChanged = { [weak self] n in self?.updateMeshState(peers: n) }
 
         // Retry the moment any network becomes usable.
         pathMonitor.pathUpdateHandler = { [weak self] path in
-            guard path.status == .satisfied else { return }
-            Task { @MainActor in await self?.flush() }
+            let up = path.status == .satisfied
+            Task { @MainActor in
+                self?.online = up
+                if up { await self?.flush() }
+            }
         }
         pathMonitor.start(queue: .global(qos: .userInitiated))
 
@@ -92,6 +101,17 @@ final class SosEngine: ObservableObject {
             startActiveLoop(id)
         }
         refreshPending()
+
+        // Start radios now: iOS may launch us in the background to restore Bluetooth sessions.
+        updateMeshRunning(foreground: UIApplication.shared.applicationState == .active)
+
+        // Keep the BLE beacon (own SOS / holds frames / has internet) current.
+        Task { [weak self] in
+            while let self {
+                self.bleTransport.refresh()
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
     }
 
     private var now: UInt32 { UInt32(Date().timeIntervalSince1970) }
@@ -105,8 +125,8 @@ final class SosEngine: ObservableObject {
     }
 
     func onBackground() {
-        // Without an active SOS iOS suspends us shortly; stop radios cleanly instead of being cut off.
-        if !isActive { updateMeshRunning(foreground: false) }
+        // Nearby stops in the background unless an SOS keeps us alive; BLE carries on.
+        updateMeshRunning(foreground: false)
     }
 
     func didEnroll(deviceId: UUID, secret: Data) throws {
@@ -147,6 +167,7 @@ final class SosEngine: ObservableObject {
         activeAlertId = nil
         responderStatus = "cancelled"
         location.stopSosTracking()
+        updateMeshRunning()
         emitFrame(alertId: alertId, kind: kind, fix: nil, cancel: true)
         textContacts(alertId: alertId, kind: kind, cancel: true)
     }
@@ -205,6 +226,7 @@ final class SosEngine: ObservableObject {
             activeLoop?.cancel()
             activeAlertId = nil
             location.stopSosTracking()
+            updateMeshRunning()
         }
     }
 
@@ -219,18 +241,25 @@ final class SosEngine: ObservableObject {
         let pending = outbox.unconfirmed()
         let own = pending.filter(\.own)
         let relayed = pending.filter { !$0.own }
-        if !own.isEmpty { await upload(own, channel: "internet", relayId: nil) }
-        if !relayed.isEmpty { await upload(relayed, channel: "mesh", relayId: credentials.deviceId?.uuidString.lowercased()) }
+        if !own.isEmpty { await upload(own, channel: "internet", relayId: nil, ownFrames: true) }
+        if !relayed.isEmpty {
+            await upload(relayed, channel: "mesh", relayId: credentials.deviceId?.uuidString.lowercased(), ownFrames: false)
+        }
         offerGatewaySms()
         refreshPending()
     }
 
-    private func upload(_ entries: [Outbox.Entry], channel: String, relayId: String?) async {
-        let ownFrames = relayId == nil
+    private func upload(_ entries: [Outbox.Entry], channel: String, relayId: String?, ownFrames: Bool) async {
         if ownFrames { internet = ChannelState(health: .working, detail: "sending…") }
         do {
             let results = try await backend.postSignals(entries.map(\.frame), channel: channel, relayDeviceId: relayId)
             outbox.markConfirmed(zip(entries, results).filter { $0.1.terminal }.map { $0.0.frameId })
+            // Keep receipts so nearby phones still carrying these frames learn they can stop.
+            for (e, r) in zip(entries, results) {
+                if let r64 = r.receipt, let receipt = try? FrameCodec.fromBase64Url(r64) {
+                    ackLedger.add(Ack(frameId: e.frameId, receipt: receipt))
+                }
+            }
             guard ownFrames else { return }
             if let rejected = results.first(where: { $0.status == "rejected" }) {
                 internet = ChannelState(health: .failed, detail: "server rejected: \(rejected.reason ?? "?")")
@@ -311,21 +340,58 @@ final class SosEngine: ObservableObject {
 
     // MARK: - relay
 
-    private func onPeerPayload(_ endpoint: EndpointID, _ payload: Data) {
-        let fresh = FrameCodec.split(payload).compactMap { raw -> Data? in
+    /// Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload.
+    private func onFramesFromPeers(_ frames: [Data], source: String) {
+        let fresh = frames.compactMap { raw -> Data? in
             guard case let .relay(frame) = relayPolicy.onFrameFromPeer(raw) else { return nil }
             return outbox.add(frame, own: false) ? frame : nil
         }
         guard !fresh.isEmpty else { return }
         relayedForOthers += fresh.count
-        meshTransport.broadcast(fresh, except: endpoint)
+        meshTransport.broadcast(fresh, except: source.hasPrefix("nearby:") ? String(source.dropFirst(7)) : nil)
         refreshPending()
+        bleTransport.refresh()
         Task { await flush() }
+    }
+
+    /// Receipts from nearby phones. Our own frames count as delivered only if the receipt
+    /// verifies with our key, so a fake "delivered" cannot silence an SOS.
+    private func onAcksFromPeers(_ incoming: [Ack]) {
+        let signer = credentials.signer
+        let accepted = incoming.filter { ack in
+            guard let e = outbox.entry(ack.frameId), !e.confirmed else { return false }
+            if !e.own { return true }
+            guard let signer else { return false }
+            return Receipts.verify(ack, signer: signer)
+        }
+        guard !accepted.isEmpty else { return }
+        outbox.markConfirmed(accepted.map(\.frameId))
+        accepted.forEach(ackLedger.add)
+        if accepted.contains(where: { outbox.entry($0.frameId)?.own == true }) {
+            ble = ChannelState(health: .ok, detail: "delivered through a nearby phone")
+        }
+        refreshPending()
+        bleTransport.refresh()
     }
 
     func updateMeshRunning(foreground: Bool = true) {
         if isActive || (settings.relayEnabled && foreground) { meshTransport.start() } else { meshTransport.stop() }
         updateMeshState(peers: nil)
+        // BLE keeps working in the background (bluetooth-central/peripheral modes), so relay mode
+        // keeps it on even when the app is not open.
+        if isActive || settings.relayEnabled {
+            bleTransport.start()
+            if ble.health != .ok {
+                ble = ChannelState(health: bleTransport.bluetoothOn ? .working : .failed,
+                                   detail: bleTransport.bluetoothOn ? "listening for nearby phones" : "turn on Bluetooth")
+            }
+        } else {
+            bleTransport.stop()
+            ble = ChannelState(health: .idle, detail: "off")
+        }
+        // Android phones only see an iPhone's BLE advert while the app is in the foreground:
+        // keep the screen awake while an SOS is active and the app is open.
+        UIApplication.shared.isIdleTimerDisabled = isActive && foreground
     }
 
     private func updateMeshState(peers: Int?) {
@@ -341,4 +407,38 @@ final class SosEngine: ObservableObject {
     }
 
     private func refreshPending() { pendingFrames = outbox.unconfirmed().count }
+}
+
+extension SosEngine: BleHost {
+    func beacon() -> BleProtocol.Beacon {
+        let pending = outbox.unconfirmed()
+        var flags: UInt8 = 0
+        if settings.activeAlertId != nil { flags |= BleProtocol.flagOwnSos }
+        if online { flags |= BleProtocol.flagHasInternet }
+        if !pending.isEmpty { flags |= BleProtocol.flagHoldsFrames }
+        return BleProtocol.Beacon(flags: flags, digest: BleProtocol.digest(pending.map(\.frameId)))
+    }
+
+    func localState() -> ContactPolicy.Local {
+        ContactPolicy.Local(holdsUndelivered: !outbox.unconfirmed().isEmpty, hasInternet: online)
+    }
+
+    func framesToServe() -> [Data] { rotation.pick(outbox.unconfirmed()) }
+
+    func framesToPush() -> [Data] {
+        outbox.unconfirmed().sorted { $0.own && !$1.own }.prefix(BleProtocol.maxFramesPerValue).map(\.frame)
+    }
+
+    func recentAcks() -> [Ack] { ackLedger.recent(BleProtocol.maxAcksPerValue) }
+
+    func onFramesReceived(_ frames: [Data], source: String) { onFramesFromPeers(frames, source: source) }
+
+    func onAcksReceived(_ acks: [Ack]) { onAcksFromPeers(acks) }
+
+    func uploadPulled(_ frames: [Data]) async -> [Ack] {
+        guard online else { return [] }
+        await flush()
+        let ids = Set(frames.map(FrameCodec.frameId))
+        return ackLedger.recent(64).filter { ids.contains($0.frameId) }
+    }
 }

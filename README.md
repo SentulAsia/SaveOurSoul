@@ -119,9 +119,11 @@ The iOS app works like the Android one and speaks the same protocol. Where iOS b
 
 ### Platform notes / known limits
 
-* **iOS relay mode only works while the app is open.** Apple suspends background apps, so an
-  iPhone in someone's pocket will not relay a stranger's SOS the way an Android phone in relay
-  mode does. The victim's own iPhone keeps sending in the background while its SOS is active.
+* **iPhones in the background:** the Bluetooth LE relay ([docs/BLE.md](docs/BLE.md)) keeps
+  scanning, collecting and pushing SOS frames from the background. However, iOS hides a
+  backgrounded iPhone's advert from Android phones. An iPhone *victim* should keep the SOS
+  screen open (the app keeps the screen awake); when locked it still pushes its SOS to any
+  phone it sees advertising internet. Nearby Connections on iOS runs only in the foreground.
 * **iOS Nearby:** Google's Swift package is pulled from `github.com/google/nearby`. The
   `NSBonjourServices` entry in `ios/project.yml` is worked out from the service id. Check it
   against Google's iOS setup guide if Wi-Fi discovery doesn't find peers.
@@ -131,6 +133,21 @@ The iOS app works like the Android one and speaks the same protocol. Where iOS b
 * Nearby Connections needs Google Play services. On devices without them (e.g. some AOSP
   builds) the mesh channel is off; internet and SMS still work.
 * The relay foreground service costs some battery. Users can turn relay mode off in settings.
+
+## Hajj deployment (Arafat, Mina, Muzdalifah)
+
+Built for crowds where cellular is saturated:
+
+* **Bluetooth LE crowd relay** on both platforms. An offline phone with an SOS pushes it to the
+  nearest phone that has internet; online phones collect from everyone nearby. Signed receipts
+  flow back, so the crowd stops carrying a frame once the server has it. See [docs/BLE.md](docs/BLE.md).
+* **"Lost" emergency type** (separated from the group), selected by default in the app.
+* Frames, receipts and the BLE beacon are byte-compatible across backend, Android and iOS,
+  enforced by `protocol/test-vectors.json`.
+
+Before relying on it at Hajj, it **must** be field-tested with many phones (see the end of
+docs/BLE.md). A Saudi SMS provider with two-way SMS (e.g. Unifonic or Taqnyat) also needs a
+small adapter for its inbound-webhook format.
 
 ## Next steps worth considering
 

@@ -19,7 +19,14 @@ class BackendClient(private val baseUrl: () -> String) {
     data class Enrollment(val deviceId: UUID, val secret: ByteArray)
 
     /** Per-frame result from POST /api/v1/signals. */
-    data class FrameResult(val frameId: UUID?, val status: String, val reason: String?, val alertStatus: String?) {
+    data class FrameResult(
+        val frameId: UUID?,
+        val status: String,
+        val reason: String?,
+        val alertStatus: String?,
+        /** Delivery receipt only the sending phone can verify (see core/Receipts.kt). */
+        val receipt: ByteArray?,
+    ) {
         /** The backend has the frame (or will never accept it) — stop retrying. */
         val terminal get() = status == "accepted" || status == "duplicate" || status == "rejected"
     }
@@ -45,6 +52,7 @@ class BackendClient(private val baseUrl: () -> String) {
                 status = r.getString("status"),
                 reason = r.optString("reason").takeIf { it.isNotEmpty() },
                 alertStatus = r.optString("alertStatus").takeIf { it.isNotEmpty() },
+                receipt = r.optString("receipt").takeIf { it.isNotEmpty() }?.let(FrameCodec::fromBase64Url),
             )
         }
     }

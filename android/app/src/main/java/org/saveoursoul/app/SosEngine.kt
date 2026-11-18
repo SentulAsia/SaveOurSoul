@@ -17,7 +17,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.saveoursoul.core.Ack
+import org.saveoursoul.core.AckLedger
+import org.saveoursoul.core.BleProtocol
+import org.saveoursoul.core.ContactPolicy
 import org.saveoursoul.core.FrameCodec
+import org.saveoursoul.core.OutboxRotation
+import org.saveoursoul.core.Receipts
 import org.saveoursoul.core.FrameFlags
 import org.saveoursoul.core.Outbox
 import org.saveoursoul.core.PanicFrame
@@ -59,6 +65,7 @@ class SosEngine(
         val internet: ChannelState = ChannelState(),
         val sms: ChannelState = ChannelState(),
         val mesh: ChannelState = ChannelState(),
+        val ble: ChannelState = ChannelState(),
         /** Backend alert status: open / acknowledged / resolved / cancelled. */
         val responderStatus: String? = null,
         val lastFix: Location? = null,
@@ -75,7 +82,47 @@ class SosEngine(
     private var activeLoop: Job? = null
     private var lastSmsAt = 0L
 
-    val mesh = MeshTransport(context, ::onPeerPayload) { outbox.unconfirmed().map { it.frame } }
+    private val acks = AckLedger()
+    private val rotation = OutboxRotation()
+
+    val mesh = MeshTransport(context, { endpoint, payload -> onFramesFromPeers(FrameCodec.split(payload), "nearby:$endpoint") }) {
+        outbox.unconfirmed().map { it.frame }
+    }
+
+    /** Crowd-grade Bluetooth LE transport shared with iOS (docs/BLE.md). */
+    val ble = BleTransport(context, object : BleHost {
+        override fun beacon(): BleProtocol.Beacon {
+            val pending = outbox.unconfirmed()
+            var flags = 0
+            if (settings.activeAlertId != null) flags = flags or BleProtocol.FLAG_OWN_SOS
+            if (internet.hasValidatedInternet()) flags = flags or BleProtocol.FLAG_HAS_INTERNET
+            if (pending.isNotEmpty()) flags = flags or BleProtocol.FLAG_HOLDS_FRAMES
+            return BleProtocol.Beacon(flags, BleProtocol.digest(pending.map { it.frameId }))
+        }
+
+        override fun localState() = ContactPolicy.Local(
+            holdsUndelivered = outbox.unconfirmed().isNotEmpty(),
+            hasInternet = internet.hasValidatedInternet(),
+        )
+
+        override fun framesToServe() = rotation.pick(outbox.unconfirmed())
+
+        override fun framesToPush() =
+            outbox.unconfirmed().sortedByDescending { it.own }.take(BleProtocol.MAX_FRAMES_PER_VALUE).map { it.frame }
+
+        override fun recentAcks() = acks.recent(BleProtocol.MAX_ACKS_PER_VALUE)
+
+        override fun onFramesReceived(frames: List<ByteArray>, source: String) = onFramesFromPeers(frames, source)
+
+        override fun onAcksReceived(acks: List<Ack>) = onAcksFromPeers(acks)
+
+        override suspend fun uploadPulled(frames: List<ByteArray>): List<Ack> {
+            if (!internet.hasAnyInternet()) return emptyList()
+            flush()
+            val ids = frames.map(FrameCodec::frameId).toSet()
+            return acks.recent(64).filter { it.frameId in ids }
+        }
+    })
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state
@@ -91,6 +138,13 @@ class SosEngine(
         )
         scope.launch {
             mesh.peers.collect { n -> _state.update { it.copy(mesh = meshState(n)) } }
+        }
+        // Keep the BLE beacon (own SOS / holds frames / has internet) current.
+        scope.launch {
+            while (true) {
+                ble.refresh()
+                delay(BLE_REFRESH_MS)
+            }
         }
         // Resume an SOS that was active when the process died.
         settings.activeAlertId?.let { id ->
@@ -236,6 +290,8 @@ class SosEngine(
         }
         val done = entries.zip(delivery.results).filter { (_, r) -> r.terminal }.map { (e, _) -> e.frameId }
         outbox.markConfirmed(done)
+        // Keep receipts so nearby phones still carrying these frames learn they can stop.
+        entries.zip(delivery.results).forEach { (e, r) -> r.receipt?.let { acks.add(Ack(e.frameId, it)) } }
         if (relayId != null) return
         val rejected = delivery.results.firstOrNull { it.status == "rejected" }
         val alertStatus = delivery.results.lastOrNull { it.alertStatus != null }?.alertStatus
@@ -278,19 +334,42 @@ class SosEngine(
 
     // --- relay --------------------------------------------------------------------------------
 
-    private fun onPeerPayload(endpointId: String, payload: ByteArray) {
-        val fresh = FrameCodec.split(payload).mapNotNull { raw ->
+    /** Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload. */
+    private fun onFramesFromPeers(frames: List<ByteArray>, source: String) {
+        val fresh = frames.mapNotNull { raw ->
             when (val d = relayPolicy.onFrameFromPeer(raw)) {
                 is RelayPolicy.Decision.Relay -> d.frame.takeIf { outbox.add(it, own = false) }
                 is RelayPolicy.Decision.Drop -> null
             }
         }
         if (fresh.isEmpty()) return
-        Log.i(TAG, "relaying ${fresh.size} frame(s) from $endpointId")
+        Log.i(TAG, "relaying ${fresh.size} frame(s) from $source")
         _state.update { it.copy(relayedForOthers = it.relayedForOthers + fresh.size) }
-        mesh.broadcast(fresh, exceptEndpoint = endpointId)
+        mesh.broadcast(fresh, exceptEndpoint = source.removePrefix("nearby:"))
         refreshPending()
+        ble.refresh()
         scope.launch { flush() }
+    }
+
+    /**
+     * Receipts from nearby phones. Our own frames count as delivered only if the receipt
+     * verifies with our key, so a fake "delivered" cannot silence an SOS. For frames we relay
+     * we cannot verify, but a receipt is a good enough reason to stop spreading them.
+     */
+    private fun onAcksFromPeers(incoming: List<Ack>) {
+        val confirmed = incoming.filter { ack ->
+            val entry = outbox.get(ack.frameId) ?: return@filter false
+            if (entry.confirmed) return@filter false
+            !entry.own || Receipts.verify(ack, credentials.signer)
+        }
+        if (confirmed.isEmpty()) return
+        outbox.markConfirmed(confirmed.map { it.frameId })
+        confirmed.forEach(acks::add)
+        if (confirmed.any { outbox.get(it.frameId)?.own == true }) {
+            _state.update { it.copy(ble = ChannelState(Health.OK, "delivered through a nearby phone")) }
+        }
+        refreshPending()
+        ble.refresh()
     }
 
     fun updateMeshRunning() {
@@ -300,7 +379,15 @@ class SosEngine(
         } catch (e: SecurityException) {
             _state.update { it.copy(mesh = ChannelState(Health.FAILED, "Bluetooth/Wi-Fi permission missing")) }
         }
-        _state.update { it.copy(mesh = meshState(mesh.peers.value)) }
+        val bleState = if (!want) {
+            ble.stop()
+            ChannelState(Health.IDLE, "off")
+        } else if (ble.start()) {
+            ChannelState(Health.WORKING, "listening for nearby phones")
+        } else {
+            ChannelState(Health.FAILED, "turn on Bluetooth")
+        }
+        _state.update { it.copy(mesh = meshState(mesh.peers.value), ble = if (it.ble.health == Health.OK && want) it.ble else bleState) }
     }
 
     private fun meshState(peers: Int) = when {
@@ -318,5 +405,6 @@ class SosEngine(
         const val LOOP_INTERVAL_MS = 10_000L
         const val LOCATION_INTERVAL_SEC = 60L
         const val SMS_MIN_INTERVAL_SEC = 120L
+        const val BLE_REFRESH_MS = 5_000L
     }
 }

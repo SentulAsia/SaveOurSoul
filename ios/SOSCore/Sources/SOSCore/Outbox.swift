@@ -12,6 +12,14 @@ public final class Outbox: @unchecked Sendable {
         public var confirmed = false
         public var smsSent = false
         public var frameId: UUID { FrameCodec.frameId(frame) }
+
+        public init(frame: Data, own: Bool, addedAt: Int64, confirmed: Bool = false, smsSent: Bool = false) {
+            self.frame = frame
+            self.own = own
+            self.addedAt = addedAt
+            self.confirmed = confirmed
+            self.smsSent = smsSent
+        }
     }
 
     private let url: URL
@@ -47,6 +55,11 @@ public final class Outbox: @unchecked Sendable {
     public func unconfirmed() -> [Entry] {
         lock.lock(); defer { lock.unlock() }
         return entries.filter { !$0.confirmed }
+    }
+
+    public func entry(_ id: UUID) -> Entry? {
+        lock.lock(); defer { lock.unlock() }
+        return entries.first { $0.frameId == id }
     }
 
     public var count: Int {

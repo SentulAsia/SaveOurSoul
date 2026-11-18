@@ -23,6 +23,10 @@ class InternetChannel(context: Context, private val backend: BackendClient) {
 
     fun hasAnyInternet(): Boolean = candidates().isNotEmpty()
 
+    /** Internet that Android has actually validated (not a captive portal): advertised to nearby phones. */
+    fun hasValidatedInternet(): Boolean =
+        cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+
     suspend fun upload(frames: List<ByteArray>, channel: String, relayDeviceId: String?): Delivery? {
         for (n in candidates()) {
             try {

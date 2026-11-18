@@ -3,7 +3,7 @@ import Foundation
 
 /// Emergency category, encoded as one byte. Order is part of the wire protocol.
 public enum SosKind: UInt8, CaseIterable, Codable, Sendable {
-    case general, medical, fire, violence, accident
+    case general, medical, fire, violence, accident, lost
 }
 
 public struct FrameFlags: OptionSet, Sendable, Hashable {

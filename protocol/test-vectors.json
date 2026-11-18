@@ -18,7 +18,8 @@
         "batteryPct": 57
       },
       "base64url": "AQEBABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
-      "sms": "SOS1:AQEBABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY"
+      "sms": "SOS1:AQEBABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
+      "receipt": "-hpPjfo8agw"
     },
     {
       "name": "southern/western hemisphere",
@@ -37,7 +38,8 @@
         "batteryPct": 57
       },
       "base64url": "AQEEABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4Dr0AgApd9KuAAMOR4FZ2Y5GSalPpP0sCIeLPY",
-      "sms": "SOS1:AQEEABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4Dr0AgApd9KuAAMOR4FZ2Y5GSalPpP0sCIeLPY"
+      "sms": "SOS1:AQEEABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4Dr0AgApd9KuAAMOR4FZ2Y5GSalPpP0sCIeLPY",
+      "receipt": "-hpPjfo8agw"
     },
     {
       "name": "relayed 3 hops (hops not signed)",
@@ -56,7 +58,28 @@
         "batteryPct": 57
       },
       "base64url": "AQEBAxEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
-      "sms": "SOS1:AQEBAxEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY"
+      "sms": "SOS1:AQEBAxEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
+      "receipt": "-hpPjfo8agw"
+    },
+    {
+      "name": "lost pilgrim (kind 5)",
+      "frame": {
+        "version": 1,
+        "flags": 1,
+        "kind": 5,
+        "hops": 0,
+        "frameId": "55555555-2222-4333-8444-555555555555",
+        "alertId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "deviceId": "01234567-89ab-4cde-8f01-23456789abcd",
+        "timestamp": 1790000000,
+        "latE7": 214133000,
+        "lonE7": 399840000,
+        "accuracyM": 12,
+        "batteryPct": 57
+      },
+      "base64url": "AQEFAFVVVVUiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AMw2kIF9UTAAAMOUE-it0GCRArxUjfbFHgcSY",
+      "sms": "SOS1:AQEFAFVVVVUiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AMw2kIF9UTAAAMOUE-it0GCRArxUjfbFHgcSY",
+      "receipt": "numJf3_KT_8"
     },
     {
       "name": "cancel without location",
@@ -75,7 +98,8 @@
         "batteryPct": 255
       },
       "base64url": "AQIBAJmZmZkiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AAAAAAAAAAAP____sykR4zMGW_67Vq1qj-_Uw",
-      "sms": "SOS1:AQIBAJmZmZkiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AAAAAAAAAAAP____sykR4zMGW_67Vq1qj-_Uw"
+      "sms": "SOS1:AQIBAJmZmZkiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AAAAAAAAAAAP____sykR4zMGW_67Vq1qj-_Uw",
+      "receipt": "QUbRwePEZJM"
     }
   ]
 }
