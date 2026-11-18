@@ -37,3 +37,19 @@ jobs:
         with:
           name: saveoursoul-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (shared protocol vectors)
+        working-directory: ios/SOSCore
+        run: swift test
+      - name: Build app for the simulator
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen
+          xcodebuild -project SaveOurSoul.xcodeproj -scheme SaveOurSoul \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build

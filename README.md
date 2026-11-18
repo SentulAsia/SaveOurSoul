@@ -32,6 +32,8 @@ spec is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 | `backend/` | Node.js 22 + TypeScript API. Zero runtime dependencies; SQLite through `node:sqlite`. |
 | `android/core/` | Pure Kotlin: frame codec, relay policy, persistent outbox. Unit-tested on the JVM. |
 | `android/app/` | Android app (Kotlin, Jetpack Compose, Nearby Connections, WorkManager). |
+| `ios/SOSCore/` | Swift package: frame codec, relay policy, persistent outbox. `swift test` checks the shared vectors. |
+| `ios/SaveOurSoul/` | iOS app (Swift, SwiftUI, Nearby Connections, Core Location, App Intents). |
 | `protocol/test-vectors.json` | Shared vectors that keep the Kotlin and TypeScript codecs byte-compatible. |
 
 ## Backend
@@ -94,11 +96,35 @@ How an SOS goes out (`SosEngine`):
 to other peers (hop count + 1). They are uploaded the moment any network appears; a
 WorkManager job every 15 minutes acts as a backstop.
 
+## iOS app
+
+```bash
+cd ios
+brew install xcodegen && xcodegen   # generates SaveOurSoul.xcodeproj from project.yml
+open SaveOurSoul.xcodeproj          # set your signing team, run on a device
+cd SOSCore && swift test            # protocol/outbox tests, no simulator needed
+```
+
+The iOS app works like the Android one and speaks the same protocol. Where iOS behaves differently:
+
+| | Android | iOS |
+|---|---|---|
+| Internet | Tries every network, then forces cellular | One URLSession. iOS *Wi-Fi Assist* moves to cellular when Wi-Fi has no internet. Low Data Mode is ignored for SOS. |
+| SMS | Sent silently | iOS forbids silent SMS: a **pre-filled Messages sheet** opens and the user taps Send. Contacts are offered right away; the signed gateway frame is offered if the server hasn't confirmed within the delay. |
+| Mesh | Nearby Connections, also in the background | Nearby Connections with the **same service id and strategy**, so iPhones and Android phones relay each other's SOS. It runs while the app is open, and in the background while an SOS is active. |
+| Staying alive | Foreground service | Continuous background location during an SOS (blue status-bar pill). This keeps retries, location updates and the mesh running. |
+| Store-and-forward | WorkManager every 15 min | `BGAppRefreshTask` backstop and `NWPathMonitor` (flush as soon as a network appears) |
+| Extra triggers | — | **Siri / Shortcuts / Action button / Back Tap** through the `Send SOS` App Intent |
+| Secret storage | Android Keystore (non-exportable HMAC key) | Keychain, `AfterFirstUnlockThisDeviceOnly`, so a locked phone can still sign |
+
 ### Platform notes / known limits
 
-* **iOS** is not included. iOS does not let apps send SMS silently, and it heavily limits
-  background Bluetooth advertising, so a phone-to-phone mesh relay would need a different design
-  (for example Multipeer Connectivity, used only in the foreground).
+* **iOS relay mode only works while the app is open.** Apple suspends background apps, so an
+  iPhone in someone's pocket will not relay a stranger's SOS the way an Android phone in relay
+  mode does. The victim's own iPhone keeps sending in the background while its SOS is active.
+* **iOS Nearby:** Google's Swift package is pulled from `github.com/google/nearby`. The
+  `NSBonjourServices` entry in `ios/project.yml` is worked out from the service id. Check it
+  against Google's iOS setup guide if Wi-Fi discovery doesn't find peers.
 * **Google Play policy** limits `SEND_SMS`. Sideloaded and enterprise (MDM) builds are fine.
   For Play Store distribution you would need the policy exception or would have to fall back to
   `ACTION_SENDTO` (user taps send).
@@ -110,7 +136,7 @@ WorkManager job every 15 minutes acts as a backstop.
 
 * A web dispatch console on top of `/alerts` and the SSE stream (map, ack/resolve buttons).
 * Push notifications (FCM) to responders/contacts, and an ack channel back to the victim over SMS.
-* Hardware triggers: power-button ×5, a Quick Settings tile, a Wear OS button.
+* Hardware triggers on Android: power-button ×5, a Quick Settings tile, a Wear OS button (iOS already has the App Intent).
 * Rate limiting / abuse protection on `/signals` and `/devices` at the reverse proxy.
 * Frame encryption for location privacy from relays (see the protocol doc).
 * Postgres instead of SQLite if you need more than one backend instance.
