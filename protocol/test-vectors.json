@@ -1,0 +1,81 @@
+{
+  "secretHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "vectors": [
+    {
+      "name": "medical with location",
+      "frame": {
+        "version": 1,
+        "flags": 1,
+        "kind": 1,
+        "hops": 0,
+        "frameId": "11111111-2222-4333-8444-555555555555",
+        "alertId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "deviceId": "01234567-89ab-4cde-8f01-23456789abcd",
+        "timestamp": 1790000000,
+        "latE7": 319539000,
+        "lonE7": 357900000,
+        "accuracyM": 12,
+        "batteryPct": 57
+      },
+      "base64url": "AQEBABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
+      "sms": "SOS1:AQEBABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY"
+    },
+    {
+      "name": "southern/western hemisphere",
+      "frame": {
+        "version": 1,
+        "flags": 1,
+        "kind": 4,
+        "hops": 0,
+        "frameId": "11111111-2222-4333-8444-555555555555",
+        "alertId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "deviceId": "01234567-89ab-4cde-8f01-23456789abcd",
+        "timestamp": 1790000000,
+        "latE7": -338688000,
+        "lonE7": -1512093000,
+        "accuracyM": 12,
+        "batteryPct": 57
+      },
+      "base64url": "AQEEABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4Dr0AgApd9KuAAMOR4FZ2Y5GSalPpP0sCIeLPY",
+      "sms": "SOS1:AQEEABEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4Dr0AgApd9KuAAMOR4FZ2Y5GSalPpP0sCIeLPY"
+    },
+    {
+      "name": "relayed 3 hops (hops not signed)",
+      "frame": {
+        "version": 1,
+        "flags": 1,
+        "kind": 1,
+        "hops": 3,
+        "frameId": "11111111-2222-4333-8444-555555555555",
+        "alertId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "deviceId": "01234567-89ab-4cde-8f01-23456789abcd",
+        "timestamp": 1790000000,
+        "latE7": 319539000,
+        "lonE7": 357900000,
+        "accuracyM": 12,
+        "batteryPct": 57
+      },
+      "base64url": "AQEBAxEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY",
+      "sms": "SOS1:AQEBAxEREREiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4ATC8c4FVUe4AAMOac2OTfFAa9cwxFgjW2UsvY"
+    },
+    {
+      "name": "cancel without location",
+      "frame": {
+        "version": 1,
+        "flags": 2,
+        "kind": 1,
+        "hops": 0,
+        "frameId": "99999999-2222-4333-8444-555555555555",
+        "alertId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        "deviceId": "01234567-89ab-4cde-8f01-23456789abcd",
+        "timestamp": 1790000000,
+        "latE7": 0,
+        "lonE7": 0,
+        "accuracyM": 65535,
+        "batteryPct": 255
+      },
+      "base64url": "AQIBAJmZmZkiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AAAAAAAAAAAP____sykR4zMGW_67Vq1qj-_Uw",
+      "sms": "SOS1:AQIBAJmZmZkiIkMzhERVVVVVVVWqqqqqu7tMzI3d7u7u7u7uASNFZ4mrTN6PASNFZ4mrzWqxO4AAAAAAAAAAAP____sykR4zMGW_67Vq1qj-_Uw"
+    }
+  ]
+}

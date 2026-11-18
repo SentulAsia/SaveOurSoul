@@ -1,0 +1,19 @@
+{
+  "name": "saveoursoul-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend API that receives SOS panic frames over internet, SMS and Bluetooth/Wi-Fi mesh relays.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
+    "typecheck": "tsc",
+    "simulate": "node --disable-warning=ExperimentalWarning tools/simulate.ts",
+    "vectors": "node --disable-warning=ExperimentalWarning tools/gen-vectors.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
