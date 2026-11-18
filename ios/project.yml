@@ -1,0 +1,51 @@
+# Generate the Xcode project with XcodeGen:  brew install xcodegen && xcodegen
+name: SaveOurSoul
+options:
+  bundleIdPrefix: org.saveoursoul
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  SOSCore:
+    path: SOSCore
+  NearbyConnections:
+    url: https://github.com/google/nearby
+    branch: main  # pin to a release tag/revision before shipping
+targets:
+  SaveOurSoul:
+    type: application
+    platform: iOS
+    sources: [SaveOurSoul]
+    dependencies:
+      - package: SOSCore
+      - package: NearbyConnections
+        product: NearbyConnections
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: SaveOurSoul/Info.plist
+      properties:
+        CFBundleDisplayName: SaveOurSoul
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: Your location is sent with your SOS so responders can find you.
+        NSLocationAlwaysAndWhenInUseUsageDescription: While an SOS is active your location keeps updating, even in the background.
+        NSBluetoothAlwaysUsageDescription: Bluetooth lets your SOS reach nearby phones when there is no internet, and lets you relay theirs.
+        NSLocalNetworkUsageDescription: The local network lets your SOS reach nearby phones when there is no internet.
+        # Nearby Connections' Wi-Fi LAN medium advertises a Bonjour service derived from the service id
+        # ("_" + first 12 hex chars of SHA-256("org.saveoursoul.sos.v1") + "._tcp").
+        NSBonjourServices: [_19e735ef5c3e._tcp]
+        UIBackgroundModes: [location, bluetooth-central, bluetooth-peripheral, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [org.saveoursoul.flush]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+schemes:
+  SaveOurSoul:
+    build:
+      targets:
+        SaveOurSoul: all

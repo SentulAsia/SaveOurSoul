@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 import { createApp } from "../src/app.ts";
 import { Ingestor } from "../src/ingest.ts";
-import { Flags, encodeFrame } from "../src/protocol.ts";
+import { Flags, encodeFrame, receiptFor } from "../src/protocol.ts";
 import type { PanicFrame } from "../src/protocol.ts";
 import { Store } from "../src/store.ts";
 
@@ -74,6 +74,8 @@ test("panic over internet creates an open alert visible to responders", async ()
   assert.equal(r.status, 200);
   assert.equal(r.json.results[0].status, "accepted");
   assert.equal(r.json.results[0].alertStatus, "open");
+  // The receipt is keyed with the device secret, so only the sender can verify it.
+  assert.equal(r.json.results[0].receipt, receiptFor(r.json.results[0].frameId, dev.secret).toString("base64url"));
 
   const list = await api("GET", "/api/v1/alerts", undefined, responder);
   const a = list.json.alerts.find((x: any) => x.id === alertId);

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { FRAME_LENGTH, decodeFrame, encodeFrame, extractSmsFrames, fromBase64Url, verifyFrame } from "../src/protocol.ts";
+import { FRAME_LENGTH, decodeFrame, encodeFrame, extractSmsFrames, fromBase64Url, receiptFor, verifyFrame } from "../src/protocol.ts";
 import type { PanicFrame } from "../src/protocol.ts";
 
 const vectors = JSON.parse(readFileSync(new URL("../../protocol/test-vectors.json", import.meta.url), "utf8")) as {
   secretHex: string;
-  vectors: Array<{ name: string; frame: PanicFrame; base64url: string; sms: string }>;
+  vectors: Array<{ name: string; frame: PanicFrame; base64url: string; sms: string; receipt: string }>;
 };
 const secret = Buffer.from(vectors.secretHex, "hex");
 
@@ -18,6 +18,7 @@ for (const v of vectors.vectors) {
     assert.deepEqual(decodeFrame(fromBase64Url(v.base64url)), v.frame);
     assert.ok(verifyFrame(encoded, secret));
     assert.ok(v.sms.length <= 160, "must fit in a single SMS");
+    assert.equal(receiptFor(v.frame.frameId, secret).toString("base64url"), v.receipt);
   });
 }
 
@@ -34,7 +35,7 @@ test("hop counter is not covered by the MAC, everything else is", () => {
 });
 
 test("extracts multiple frames from an SMS body", () => {
-  const body = `${vectors.vectors[0]!.sms}\nhelp ${vectors.vectors[3]!.sms}`;
-  assert.deepEqual(extractSmsFrames(body), [vectors.vectors[0]!.base64url, vectors.vectors[3]!.base64url]);
+  const body = `${vectors.vectors[0]!.sms}\nhelp ${vectors.vectors[4]!.sms}`;
+  assert.deepEqual(extractSmsFrames(body), [vectors.vectors[0]!.base64url, vectors.vectors[4]!.base64url]);
   assert.deepEqual(extractSmsFrames("hello"), []);
 });
