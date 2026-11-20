@@ -14,8 +14,38 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        // Default backend; can be changed in the app's setup screen.
-        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://sos.example.org\"")
+    }
+
+    // One variant per environment. They install side by side (different application ids), talk to
+    // their own backend, and use their own Bluetooth/Nearby namespace so test phones never carry
+    // real SOS traffic. Build e.g. `./gradlew assembleProdRelease` or `installDevDebug`.
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "SOS Dev")
+            buildConfigField("String", "APP_ENV", "\"development\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-dev.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"DEV\"")
+        }
+        create("testing") {
+            dimension = "env"
+            applicationIdSuffix = ".testing"
+            versionNameSuffix = "-testing"
+            resValue("string", "app_name", "SOS Testing")
+            buildConfigField("String", "APP_ENV", "\"testing\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-testing.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"TESTING\"")
+        }
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "SaveOurSoul")
+            buildConfigField("String", "APP_ENV", "\"production\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"PRODUCTION\"")
+        }
     }
 
     buildTypes {

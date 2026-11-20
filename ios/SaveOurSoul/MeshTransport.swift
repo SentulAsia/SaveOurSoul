@@ -10,7 +10,6 @@ import SOSCore
 /// active SOS keeps it alive in the background through continuous location updates.
 @MainActor
 final class MeshTransport: NSObject {
-    static let serviceId = "org.saveoursoul.sos.v1"
 
     private let connectionManager: ConnectionManager
     private let advertiser: Advertiser
@@ -27,8 +26,8 @@ final class MeshTransport: NSObject {
 
     private(set) var running = false
 
-    override init() {
-        connectionManager = ConnectionManager(serviceID: Self.serviceId, strategy: .cluster)
+    init(namespace: MeshNamespace) {
+        connectionManager = ConnectionManager(serviceID: namespace.nearbyServiceId, strategy: .cluster)
         advertiser = Advertiser(connectionManager: connectionManager)
         discoverer = Discoverer(connectionManager: connectionManager)
         super.init()

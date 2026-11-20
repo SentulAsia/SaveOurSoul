@@ -14,6 +14,8 @@ export interface AppConfig {
   smsWebhookToken?: string;
   /** Max frames per /signals request (relays upload in batches). */
   maxBatch?: number;
+  /** development | testing | production (reported by /healthz). */
+  environment?: string;
   /** Unix-seconds clock, injectable for tests. */
   clock?: () => number;
 }
@@ -94,7 +96,7 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
     const phone = optString(body.phone, "phone", 32) ?? null;
     const id = randomUUID();
     const secret = randomBytes(32);
-    store.insertDevice({ id, secret, name, phone, createdAt: clock() });
+    await store.insertDevice({ id, secret, name, phone, createdAt: clock() });
     send(res, 201, { deviceId: id, secret: secret.toString("base64url") });
   }
 
@@ -108,7 +110,8 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
     if (!Channels.includes(channel)) throw new HttpError(400, `channel must be one of ${Channels.join(", ")}`);
     const relayDeviceId = optString(body.relayDeviceId, "relayDeviceId", 64) ?? null;
     const now = clock();
-    const results = (frames as string[]).map((f) => ingestor.ingest(f, { channel, relayDeviceId, now }));
+    const results = [];
+    for (const f of frames as string[]) results.push(await ingestor.ingest(f, { channel, relayDeviceId, now }));
     send(res, 200, { results });
   }
 
@@ -136,7 +139,8 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
       text = p.get("Body") ?? undefined;
     }
     const now = clock();
-    const results = extractSmsFrames(text ?? "").map((f) => ingestor.ingest(f, { channel: "sms", smsFrom: from ?? null, now }));
+    const results = [];
+    for (const f of extractSmsFrames(text ?? "")) results.push(await ingestor.ingest(f, { channel: "sms", smsFrom: from ?? null, now }));
     if (url.searchParams.get("format") === "json") {
       send(res, 200, { results });
       return;
@@ -167,7 +171,15 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const method = req.method ?? "GET";
 
-    if (method === "GET" && path === "/healthz") return send(res, 200, { ok: true });
+    if (method === "GET" && path === "/healthz") {
+      // Render health checks hit this; a database outage must show up as unhealthy.
+      try {
+        await store.db.ping();
+        return send(res, 200, { ok: true, env: config.environment ?? "development", db: store.db.dialect });
+      } catch {
+        return send(res, 503, { ok: false, env: config.environment ?? "development", error: "database unreachable" });
+      }
+    }
     if (method === "POST" && path === "/api/v1/devices") return enroll(req, res);
     if (method === "POST" && path === "/api/v1/signals") return signals(req, res);
     if (method === "POST" && path === "/api/v1/sms/inbound") return smsInbound(req, res, url);
@@ -175,7 +187,7 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
     // Device-facing status poll: the alert id is an unguessable 128-bit value only the sender knows.
     let m = path.match(/^\/api\/v1\/alerts\/([0-9a-f-]{36})\/status$/);
     if (method === "GET" && m) {
-      const a = store.getAlert(m[1]!);
+      const a = await store.getAlert(m[1]!);
       if (!a) throw new HttpError(404, "alert not found (yet)");
       return send(res, 200, { alertId: a.id, status: a.status, acknowledgedAt: a.acknowledgedAt, channels: a.channels });
     }
@@ -189,20 +201,20 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
         const statuses = statusParam ? (statusParam.split(",") as AlertStatus[]) : undefined;
         if (statuses && !statuses.every((s) => ALERT_STATUSES.includes(s))) throw new HttpError(400, "invalid status filter");
         const limit = Math.min(Number(url.searchParams.get("limit") ?? 100) || 100, 500);
-        return send(res, 200, { alerts: store.listAlerts({ ...(statuses ? { status: statuses } : {}), limit }) });
+        return send(res, 200, { alerts: await store.listAlerts({ ...(statuses ? { status: statuses } : {}), limit }) });
       }
       m = path.match(/^\/api\/v1\/alerts\/([0-9a-f-]{36})$/);
       if (method === "GET" && m) {
-        const a = store.getAlert(m[1]!);
+        const a = await store.getAlert(m[1]!);
         if (!a) throw new HttpError(404, "alert not found");
-        return send(res, 200, { alert: a, signals: store.signalsForAlert(a.id) });
+        return send(res, 200, { alert: a, signals: await store.signalsForAlert(a.id) });
       }
       m = path.match(/^\/api\/v1\/alerts\/([0-9a-f-]{36})\/(ack|resolve)$/);
       if (method === "POST" && m) {
         const body = await readJson(req);
         const by = optString(body.by, "by", 100);
         const note = optString(body.note, "note", 2000);
-        const a = ingestor.transition(m[1]!, m[2] === "ack" ? "acknowledged" : "resolved", clock(), by, note);
+        const a = await ingestor.transition(m[1]!, m[2] === "ack" ? "acknowledged" : "resolved", clock(), by, note);
         if (!a) throw new HttpError(404, "alert not found");
         return send(res, 200, { alert: a });
       }

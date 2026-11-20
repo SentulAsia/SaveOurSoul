@@ -58,7 +58,7 @@ export class Ingestor {
     this.events.setMaxListeners(1000);
   }
 
-  ingest(frameB64: string, ctx: IngestContext): IngestResult {
+  async ingest(frameB64: string, ctx: IngestContext): Promise<IngestResult> {
     let raw: Buffer;
     let frame;
     try {
@@ -69,7 +69,7 @@ export class Ingestor {
     }
     const { frameId } = frame;
 
-    const device = this.store.getDevice(frame.deviceId);
+    const device = await this.store.getDevice(frame.deviceId);
     if (!device) return { status: "rejected", frameId, reason: "unknown_device" };
     if (!verifyFrame(raw, device.secret)) return { status: "rejected", frameId, reason: "bad_signature" };
     if (frame.hops > MAX_HOPS) return { status: "rejected", frameId, reason: "too_many_hops" };
@@ -84,31 +84,33 @@ export class Ingestor {
       hops: frame.hops,
       receivedAt: ctx.now,
     };
-
     const receipt64 = receiptFor(frameId, device.secret).toString("base64url");
+    const isCancel = (frame.flags & Flags.CANCEL) !== 0;
+    const hasLoc = (frame.flags & Flags.HAS_LOCATION) !== 0;
+    const signal = {
+      frameId,
+      alertId: frame.alertId,
+      deviceId: frame.deviceId,
+      flags: frame.flags,
+      kind: frame.kind,
+      hops: frame.hops,
+      deviceTs: frame.timestamp,
+      latE7: hasLoc ? frame.latE7 : null,
+      lonE7: hasLoc ? frame.lonE7 : null,
+      accuracyM: hasLoc && frame.accuracyM !== UNKNOWN_ACCURACY ? frame.accuracyM : null,
+      batteryPct: frame.batteryPct !== UNKNOWN_BATTERY ? frame.batteryPct : null,
+    };
+
     let created = false;
-    let changed = false;
-    const outcome = this.store.transaction((): IngestResult => {
-      const owner = this.store.alertDeviceId(frame.alertId);
+    // In a crowd, many relays upload the same frame at the same moment: the inserts below use
+    // ON CONFLICT DO NOTHING, so exactly one upload wins and the others become duplicates.
+    const outcome = await this.store.transaction(async (s): Promise<IngestResult> => {
+      const owner = await s.alertDeviceId(frame.alertId);
       if (owner !== null && owner !== frame.deviceId) {
         return { status: "rejected", frameId, reason: "alert_device_mismatch" };
       }
-
-      if (this.store.hasSignal(frameId)) {
-        // Same frame via another channel/relay: record the path for diagnostics, nothing else changes.
-        this.store.insertReceipt(receipt);
-        return {
-          status: "duplicate",
-          frameId,
-          alertId: frame.alertId,
-          alertStatus: this.store.getAlert(frame.alertId)!.status,
-          receipt: receipt64,
-        };
-      }
-
-      const isCancel = (frame.flags & Flags.CANCEL) !== 0;
       if (owner === null) {
-        this.store.insertAlert({
+        created = await s.insertAlert({
           id: frame.alertId,
           deviceId: frame.deviceId,
           kind: kindName(frame.kind),
@@ -117,59 +119,42 @@ export class Ingestor {
           triggeredAt: frame.timestamp,
           now: ctx.now,
         });
-        created = true;
       }
 
-      const hasLoc = (frame.flags & Flags.HAS_LOCATION) !== 0;
-      const signal = {
-        frameId,
-        alertId: frame.alertId,
-        deviceId: frame.deviceId,
-        flags: frame.flags,
-        kind: frame.kind,
-        hops: frame.hops,
-        deviceTs: frame.timestamp,
-        latE7: hasLoc ? frame.latE7 : null,
-        lonE7: hasLoc ? frame.lonE7 : null,
-        accuracyM: hasLoc && frame.accuracyM !== UNKNOWN_ACCURACY ? frame.accuracyM : null,
-        batteryPct: frame.batteryPct !== UNKNOWN_BATTERY ? frame.batteryPct : null,
-      };
-      this.store.insertSignal(signal);
-      this.store.insertReceipt(receipt);
-      this.store.noteTriggerTime(frame.alertId, frame.timestamp);
-      this.store.applyTelemetry(frame.alertId, signal, ctx.now);
+      if (!(await s.insertSignal(signal))) {
+        // Same frame via another channel/relay: record the path for diagnostics, nothing else changes.
+        await s.insertReceipt(receipt);
+        return { status: "duplicate", frameId, alertId: frame.alertId, alertStatus: (await s.getAlert(frame.alertId))!.status, receipt: receipt64 };
+      }
 
-      const current = this.store.getAlert(frame.alertId)!;
+      await s.insertReceipt(receipt);
+      await s.noteTriggerTime(frame.alertId, frame.timestamp);
+      await s.applyTelemetry(frame.alertId, signal, ctx.now);
+
+      const current = (await s.getAlert(frame.alertId))!;
       if (isCancel && (current.status === "open" || current.status === "acknowledged")) {
-        this.store.setStatus(frame.alertId, "cancelled", ctx.now, { note: "cancelled by user" });
+        await s.setStatus(frame.alertId, "cancelled", ctx.now, { note: "cancelled by user" });
       }
-      changed = true;
-      return {
-        status: "accepted",
-        frameId,
-        alertId: frame.alertId,
-        alertStatus: this.store.getAlert(frame.alertId)!.status,
-        receipt: receipt64,
-      };
+      return { status: "accepted", frameId, alertId: frame.alertId, alertStatus: (await s.getAlert(frame.alertId))!.status, receipt: receipt64 };
     });
 
-    if (outcome.status === "accepted" && changed) {
-      const alert = this.store.getAlert(outcome.alertId)!;
+    if (outcome.status === "accepted") {
+      const alert = (await this.store.getAlert(outcome.alertId))!;
       this.events.emit("alert", { type: created ? "alert.created" : "alert.updated", alert } satisfies AlertEvent);
     }
     return outcome;
   }
 
   /** Responder actions. Returns null if the alert does not exist. */
-  transition(alertId: string, to: "acknowledged" | "resolved", now: number, by?: string, note?: string): Alert | null {
-    const alert = this.store.getAlert(alertId);
+  async transition(alertId: string, to: "acknowledged" | "resolved", now: number, by?: string, note?: string): Promise<Alert | null> {
+    const alert = await this.store.getAlert(alertId);
     if (!alert) return null;
     if (alert.status === "resolved" || alert.status === "cancelled") return alert;
     const extra: { acknowledgedBy?: string; note?: string } = {};
     if (by !== undefined) extra.acknowledgedBy = by;
     if (note !== undefined) extra.note = note;
-    this.store.setStatus(alertId, to, now, extra);
-    const updated = this.store.getAlert(alertId)!;
+    await this.store.setStatus(alertId, to, now, extra);
+    const updated = (await this.store.getAlert(alertId))!;
     this.events.emit("alert", { type: "alert.updated", alert: updated } satisfies AlertEvent);
     return updated;
   }

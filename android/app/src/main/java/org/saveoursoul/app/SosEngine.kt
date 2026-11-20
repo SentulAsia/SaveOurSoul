@@ -25,6 +25,7 @@ import org.saveoursoul.core.FrameCodec
 import org.saveoursoul.core.OutboxRotation
 import org.saveoursoul.core.Receipts
 import org.saveoursoul.core.FrameFlags
+import org.saveoursoul.core.MeshNamespace
 import org.saveoursoul.core.Outbox
 import org.saveoursoul.core.PanicFrame
 import org.saveoursoul.core.RelayPolicy
@@ -85,12 +86,17 @@ class SosEngine(
     private val acks = AckLedger()
     private val rotation = OutboxRotation()
 
-    val mesh = MeshTransport(context, { endpoint, payload -> onFramesFromPeers(FrameCodec.split(payload), "nearby:$endpoint") }) {
-        outbox.unconfirmed().map { it.frame }
-    }
+    private val namespace = MeshNamespace.valueOf(BuildConfig.MESH_NAMESPACE)
+
+    val mesh = MeshTransport(
+        context,
+        onPayload = { endpoint, payload -> onFramesFromPeers(FrameCodec.split(payload), "nearby:$endpoint") },
+        framesToShare = { outbox.unconfirmed().map { it.frame } },
+        serviceId = namespace.nearbyServiceId,
+    )
 
     /** Crowd-grade Bluetooth LE transport shared with iOS (docs/BLE.md). */
-    val ble = BleTransport(context, object : BleHost {
+    val ble = BleTransport(context, serviceUuid = namespace.bleServiceUuid, host = object : BleHost {
         override fun beacon(): BleProtocol.Beacon {
             val pending = outbox.unconfirmed()
             var flags = 0
