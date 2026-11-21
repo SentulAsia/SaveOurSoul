@@ -10,6 +10,10 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                if !AppEnvironment.isProduction {
+                    Text("\(AppEnvironment.name.uppercased()) BUILD · not for real emergencies")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 if let e = engine.error {
                     HStack {
                         Text(e).foregroundStyle(sosRed).font(.footnote)

@@ -6,7 +6,7 @@ final class Settings {
     private let d = UserDefaults.standard
 
     var backendUrl: String {
-        get { d.string(forKey: "backend_url") ?? "https://sos.example.org" }
+        get { d.string(forKey: "backend_url") ?? AppEnvironment.defaultBackendURL }
         set { d.set(newValue.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "/")), forKey: "backend_url") }
     }
     var userName: String {

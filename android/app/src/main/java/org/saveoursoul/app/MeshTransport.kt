@@ -36,6 +36,8 @@ class MeshTransport(
     private val onPayload: (endpointId: String, payload: ByteArray) -> Unit,
     /** Frames to hand to a newly connected peer. */
     private val framesToShare: () -> List<ByteArray>,
+    /** Per-environment Nearby service id (core MeshNamespace); must match the iOS app. */
+    private val serviceId: String = SERVICE_ID,
 ) {
     private val client: ConnectionsClient = Nearby.getConnectionsClient(context)
     private val localName = "sos-" + UUID.randomUUID().toString().take(8)
@@ -80,7 +82,7 @@ class MeshTransport(
 
     private val discovery = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            if (info.serviceId != SERVICE_ID || endpointId in connected || !pending.add(endpointId)) return
+            if (info.serviceId != serviceId || endpointId in connected || !pending.add(endpointId)) return
             // Both sides discover each other; only the lexicographically smaller name dials, to avoid duplicate links.
             if (localName > info.endpointName) {
                 pending.remove(endpointId)
@@ -103,9 +105,9 @@ class MeshTransport(
         if (running) return
         running = true
         val strategy = Strategy.P2P_CLUSTER
-        client.startAdvertising(localName, SERVICE_ID, lifecycle, AdvertisingOptions.Builder().setStrategy(strategy).build())
+        client.startAdvertising(localName, serviceId, lifecycle, AdvertisingOptions.Builder().setStrategy(strategy).build())
             .addOnFailureListener { e -> Log.w(TAG, "advertising failed: ${e.message}") }
-        client.startDiscovery(SERVICE_ID, discovery, DiscoveryOptions.Builder().setStrategy(strategy).build())
+        client.startDiscovery(serviceId, discovery, DiscoveryOptions.Builder().setStrategy(strategy).build())
             .addOnFailureListener { e -> Log.w(TAG, "discovery failed: ${e.message}") }
     }
 
@@ -135,6 +137,7 @@ class MeshTransport(
     }
 
     companion object {
+        /** Production id; dev/testing builds pass their own (see core MeshNamespace). */
         const val SERVICE_ID = "org.saveoursoul.sos.v1"
         private const val TAG = "SosMesh"
         /** BYTES payloads are capped at 32 KiB by Nearby. */

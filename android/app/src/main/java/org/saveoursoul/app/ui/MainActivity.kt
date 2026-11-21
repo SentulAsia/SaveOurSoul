@@ -61,6 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.saveoursoul.app.BackendClient
+import org.saveoursoul.app.BuildConfig
 import org.saveoursoul.app.SosApp
 import org.saveoursoul.app.SosEngine
 import org.saveoursoul.app.SosService
@@ -112,6 +113,9 @@ private fun App(engine: SosEngine) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        if (BuildConfig.APP_ENV != "prod") {
+            Text("${BuildConfig.APP_ENV.uppercase()} BUILD · not for real emergencies", color = Color(0xFFFFB300), fontSize = 12.sp)
+        }
         state.error?.let { ErrorBanner(it) { engine.dismissError() } }
         if (state.isActive) ActiveSos(state) else IdleSos(state)
         ChannelPanel(state)

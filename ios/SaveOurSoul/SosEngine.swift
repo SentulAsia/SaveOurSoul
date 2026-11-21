@@ -58,7 +58,7 @@ final class SosEngine: ObservableObject {
     let credentials = DeviceCredentials()
     private(set) lazy var backend = BackendClient { [settings] in settings.backendUrl }
     private let location = LocationProvider()
-    private let meshTransport = MeshTransport()
+    private let meshTransport = MeshTransport(namespace: AppEnvironment.meshNamespace)
     private let seen = SeenCache()
     private lazy var relayPolicy = RelayPolicy(seen: seen)
     private let outbox: Outbox
@@ -67,7 +67,7 @@ final class SosEngine: ObservableObject {
     private let ackLedger = AckLedger()
     private let rotation = OutboxRotation()
     /// Crowd-grade Bluetooth LE transport shared with Android (docs/BLE.md).
-    private lazy var bleTransport = BleTransport(host: self)
+    private lazy var bleTransport = BleTransport(host: self, namespace: AppEnvironment.meshNamespace)
     private var activeLoop: Task<Void, Never>?
     private var flushing = false
     private var smsQueue: [SmsRequest] = []

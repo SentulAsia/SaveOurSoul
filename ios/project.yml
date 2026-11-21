@@ -4,6 +4,15 @@ options:
   bundleIdPrefix: org.saveoursoul
   deploymentTarget:
     iOS: "16.0"
+# One Debug/Release pair per environment. Each installs side by side (own bundle id), talks to its
+# own backend and uses its own Bluetooth/Nearby namespace. Pick one with the matching scheme.
+configs:
+  Dev Debug: debug
+  Dev Release: release
+  QA Debug: debug
+  QA Release: release
+  Prod Debug: debug
+  Prod Release: release
 packages:
   SOSCore:
     path: SOSCore
@@ -20,8 +29,34 @@ targets:
       - package: NearbyConnections
         product: NearbyConnections
     settings:
+      configs:
+        Dev Debug: &dev
+          SOS_ENV: dev
+          # The backend on your Mac (the simulator shares its network). On a real iPhone, change
+          # the server URL in the app to http://<your Mac's LAN IP>:8080.
+          SOS_BACKEND_URL: http://localhost:8080
+          SOS_MESH_NAMESPACE: DEV
+          SOS_BONJOUR_SERVICE: _eaec558b7a99._tcp
+          SOS_DISPLAY_NAME: SOS Dev
+          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.dev
+        Dev Release: *dev
+        QA Debug: &qa
+          SOS_ENV: qa
+          SOS_BACKEND_URL: https://saveoursoul-api-qa.onrender.com
+          SOS_MESH_NAMESPACE: QA
+          SOS_BONJOUR_SERVICE: _5dbc4cc4193d._tcp
+          SOS_DISPLAY_NAME: SOS QA
+          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.qa
+        QA Release: *qa
+        Prod Debug: &prod
+          SOS_ENV: prod
+          SOS_BACKEND_URL: https://saveoursoul-api.onrender.com
+          SOS_MESH_NAMESPACE: PROD
+          SOS_BONJOUR_SERVICE: _19e735ef5c3e._tcp
+          SOS_DISPLAY_NAME: SaveOurSoul
+          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios
+        Prod Release: *prod
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
@@ -30,16 +65,19 @@ targets:
     info:
       path: SaveOurSoul/Info.plist
       properties:
-        CFBundleDisplayName: SaveOurSoul
+        CFBundleDisplayName: $(SOS_DISPLAY_NAME)
+        SOSEnvironment: $(SOS_ENV)
+        SOSBackendURL: $(SOS_BACKEND_URL)
+        SOSMeshNamespace: $(SOS_MESH_NAMESPACE)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocationWhenInUseUsageDescription: Your location is sent with your SOS so responders can find you.
         NSLocationAlwaysAndWhenInUseUsageDescription: While an SOS is active your location keeps updating, even in the background.
         NSBluetoothAlwaysUsageDescription: Bluetooth lets your SOS reach nearby phones when there is no internet, and lets you relay theirs.
         NSLocalNetworkUsageDescription: The local network lets your SOS reach nearby phones when there is no internet.
-        # Nearby Connections' Wi-Fi LAN medium advertises a Bonjour service derived from the service id
-        # ("_" + first 12 hex chars of SHA-256("org.saveoursoul.sos.v1") + "._tcp").
-        NSBonjourServices: [_19e735ef5c3e._tcp]
+        # Nearby Connections' Wi-Fi LAN medium advertises a Bonjour service derived from the
+        # environment's service id: "_" + first 12 hex chars of SHA-256(service id) + "._tcp".
+        NSBonjourServices: [$(SOS_BONJOUR_SERVICE)]
         UIBackgroundModes: [location, bluetooth-central, bluetooth-peripheral, fetch]
         BGTaskSchedulerPermittedIdentifiers: [org.saveoursoul.flush]
         NSAppTransportSecurity:
@@ -49,3 +87,41 @@ schemes:
     build:
       targets:
         SaveOurSoul: all
+    run:
+      config: Prod Debug
+    test:
+      config: Prod Debug
+    profile:
+      config: Prod Release
+    analyze:
+      config: Prod Debug
+    archive:
+      config: Prod Release
+  SaveOurSoul QA:
+    build:
+      targets:
+        SaveOurSoul: all
+    run:
+      config: QA Debug
+    test:
+      config: QA Debug
+    profile:
+      config: QA Release
+    analyze:
+      config: QA Debug
+    archive:
+      config: QA Release
+  SaveOurSoul Dev:
+    build:
+      targets:
+        SaveOurSoul: all
+    run:
+      config: Dev Debug
+    test:
+      config: Dev Debug
+    profile:
+      config: Dev Release
+    analyze:
+      config: Dev Debug
+    archive:
+      config: Dev Release

@@ -65,14 +65,19 @@ interface BleHost {
  * handshake beyond a short GATT connection, which keeps it working in very dense crowds.
  */
 @SuppressLint("MissingPermission") // callers check permissions; SecurityException is caught in start()
-class BleTransport(private val context: Context, private val host: BleHost) {
+class BleTransport(
+    private val context: Context,
+    private val host: BleHost,
+    /** Per-environment GATT service UUID (core MeshNamespace). */
+    private val serviceUuid: UUID = BleProtocol.SERVICE_UUID,
+) {
     private val manager = context.getSystemService(BluetoothManager::class.java)
     private val adapter get() = manager?.adapter
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val policy = ContactPolicy()
     /** Phones keep only a few GATT links; more just fail in a crowd. */
     private val sessions = Semaphore(MAX_SESSIONS)
-    private val serviceParcel = ParcelUuid(BleProtocol.SERVICE_UUID)
+    private val serviceParcel = ParcelUuid(serviceUuid)
 
     private var server: BluetoothGattServer? = null
     private var advertising: Pair<BleProtocol.Beacon, Boolean>? = null
@@ -184,7 +189,7 @@ class BleTransport(private val context: Context, private val host: BleHost) {
     }
 
     private suspend fun runSession(device: BluetoothDevice, action: ContactPolicy.Action, key: String) {
-        GattSession(context, device).use { s ->
+        GattSession(context, device, serviceUuid).use { s ->
             s.connect()
             withTimeoutOrNull(3_000) { runCatching { s.requestMtu(247) } }
             s.discover()
@@ -267,7 +272,7 @@ class BleTransport(private val context: Context, private val host: BleHost) {
             }
         }
         val s = manager?.openGattServer(context, callback) ?: throw IOException("no GATT server")
-        val service = BluetoothGattService(BleProtocol.SERVICE_UUID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+        val service = BluetoothGattService(serviceUuid, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         fun char(uuid: UUID, write: Boolean) = BluetoothGattCharacteristic(
             uuid,
             if (write) BluetoothGattCharacteristic.PROPERTY_WRITE else BluetoothGattCharacteristic.PROPERTY_READ,
@@ -299,7 +304,11 @@ class BleTransport(private val context: Context, private val host: BleHost) {
 
 /** One short GATT client connection. Android allows one outstanding GATT operation at a time. */
 @SuppressLint("MissingPermission")
-private class GattSession(private val context: Context, private val device: BluetoothDevice) : BluetoothGattCallback(), Closeable {
+private class GattSession(
+    private val context: Context,
+    private val device: BluetoothDevice,
+    private val serviceUuid: UUID,
+) : BluetoothGattCallback(), Closeable {
     private var gatt: BluetoothGatt? = null
     @Volatile private var pending: CompletableDeferred<Any?>? = null
 
@@ -320,7 +329,7 @@ private class GattSession(private val context: Context, private val device: Blue
     suspend fun discover(): Unit = op { gatt!!.discoverServices() }
 
     private fun characteristic(uuid: UUID): BluetoothGattCharacteristic =
-        gatt?.getService(BleProtocol.SERVICE_UUID)?.getCharacteristic(uuid) ?: throw IOException("peer lacks $uuid")
+        gatt?.getService(serviceUuid)?.getCharacteristic(uuid) ?: throw IOException("peer lacks $uuid")
 
     suspend fun read(uuid: UUID): ByteArray = op { gatt!!.readCharacteristic(characteristic(uuid)) }
 

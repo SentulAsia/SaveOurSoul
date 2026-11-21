@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Backend API that receives SOS panic frames over internet, SMS and Bluetooth/Wi-Fi mesh relays.",
-  "engines": { "node": ">=22.18" },
+  "description": "Backend API that receives SOS panic frames over internet, SMS and Bluetooth relays. SQLite locally, PostgreSQL when deployed.",
+  "engines": {
+    "node": ">=22.18 <23"
+  },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.ts",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
     "typecheck": "tsc",
     "simulate": "node --disable-warning=ExperimentalWarning tools/simulate.ts",
-    "vectors": "node --disable-warning=ExperimentalWarning tools/gen-vectors.ts"
+    "vectors": "node --disable-warning=ExperimentalWarning tools/gen-vectors.ts",
+    "test:pg": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 test/api.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }

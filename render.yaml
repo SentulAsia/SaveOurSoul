@@ -1,0 +1,60 @@
+# Render Blueprint: the deployed environments of the SOS backend, in Singapore next to the Neon
+# database. (dev is not deployed: it runs on your laptop with SQLite, see docs/ENVIRONMENTS.md.)
+#
+#   APP_ENV  git branch  Render service           Neon branch
+#   qa       qa          saveoursoul-api-qa       qa
+#   prod     main        saveoursoul-api          production
+#
+# Values marked `sync: false` are entered in the Render dashboard on first deploy (never commit
+# them). `generateValue` makes Render create a random secret you can read in the dashboard.
+#
+# PLANS: both start on the free plan. A free web service sleeps after ~15 minutes idle and takes
+# up to a minute to wake: fine for qa, NOT for real emergencies. Change prod's plan to
+# "starter" (or higher) before real users depend on it.
+
+services:
+  - type: web
+    name: saveoursoul-api-qa
+    runtime: node
+    region: singapore
+    plan: free
+    branch: qa
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: qa
+      - key: DATABASE_URL # Neon "qa" branch, pooled connection string
+        sync: false
+      - key: RESPONDER_API_KEY
+        generateValue: true
+      - key: ENROLL_TOKEN
+        generateValue: true
+      - key: SMS_WEBHOOK_TOKEN
+        generateValue: true
+
+  - type: web
+    name: saveoursoul-api
+    runtime: node
+    region: singapore
+    plan: free # change to "starter" before go-live: free instances sleep when idle
+    branch: main
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: prod
+      - key: DATABASE_URL # Neon "production" branch, pooled connection string
+        sync: false
+      - key: RESPONDER_API_KEY
+        generateValue: true
+      - key: ENROLL_TOKEN
+        generateValue: true
+      - key: SMS_WEBHOOK_TOKEN
+        generateValue: true

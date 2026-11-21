@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 import { createApp } from "../src/app.ts";
+import { openDb } from "../src/db.ts";
 import { Ingestor } from "../src/ingest.ts";
 import { Flags, encodeFrame, receiptFor } from "../src/protocol.ts";
 import type { PanicFrame } from "../src/protocol.ts";
@@ -11,18 +12,25 @@ import { Store } from "../src/store.ts";
 
 let now = 1_800_000_000;
 const KEY = "responder-key";
-const store = new Store();
+// SQLite in memory by default; set TEST_DATABASE_URL=postgres://… to run the same suite on PostgreSQL.
+const target = process.env.TEST_DATABASE_URL ?? ":memory:";
+const store = new Store(openDb(target));
 const ingestor = new Ingestor(store);
 const server = createServer(createApp(store, ingestor, { responderApiKey: KEY, smsWebhookToken: "smstok", clock: () => now }));
 let base = "";
 
 before(async () => {
+  if (store.db.dialect === "postgres") {
+    await store.db.exec("DROP TABLE IF EXISTS receipts, signals, alerts, devices, schema_migrations CASCADE");
+  }
+  await store.migrate();
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-after(() => {
+after(async () => {
+  server.closeAllConnections();
   server.close();
-  store.close();
+  await store.close();
 });
 
 async function api(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -177,4 +185,30 @@ test("SSE stream pushes new alerts to dispatch consoles", async () => {
   while (!buf.includes(alertId)) buf += new TextDecoder().decode((await reader.read()).value);
   assert.match(buf, /event: alert.created/);
   ctrl.abort();
+});
+
+test(`[${store.db.dialect}] health check reports the database`, async () => {
+  const r = await api("GET", "/healthz");
+  assert.equal(r.status, 200);
+  assert.equal(r.json.db, store.db.dialect);
+});
+
+test(`[${store.db.dialect}] 20 relays uploading the same frame at once yield one accept and 19 duplicates`, async () => {
+  const dev = await enroll();
+  const alertId = randomUUID();
+  const f = frame(dev, { alertId });
+  const results = await Promise.all(
+    Array.from({ length: 20 }, (_, i) => api("POST", "/api/v1/signals", { frames: [f], channel: "mesh", relayDeviceId: `relay-${i}` })),
+  );
+  const statuses = results.map((r) => r.json.results[0].status).sort();
+  assert.equal(statuses.filter((s) => s === "accepted").length, 1);
+  assert.equal(statuses.filter((s) => s === "duplicate").length, 19);
+  const detail = await api("GET", `/api/v1/alerts/${alertId}`, undefined, responder);
+  assert.equal(detail.json.signals[0].receipts.length, 20);
+});
+
+test(`[${store.db.dialect}] migrations are idempotent`, async () => {
+  await store.migrate();
+  const row = await store.db.get("SELECT COUNT(*) AS n FROM schema_migrations");
+  assert.equal(Number(row!.n), 1);
 });

@@ -32,7 +32,7 @@ final class BleTransport: NSObject {
     private var central: CBCentralManager!
     private var peripheralManager: CBPeripheralManager!
     private let policy = ContactPolicy()
-    private let serviceUUID = CBUUID(nsuuid: BleProtocol.serviceUUID)
+    private let serviceUUID: CBUUID
     private let inbox = CBUUID(nsuuid: BleProtocol.inboxUUID)
     private let outbox = CBUUID(nsuuid: BleProtocol.outboxUUID)
     private let acks = CBUUID(nsuuid: BleProtocol.acksUUID)
@@ -45,8 +45,9 @@ final class BleTransport: NSObject {
     private var readCache: [String: Data] = [:]
     private static let maxSessions = 3
 
-    init(host: BleHost) {
+    init(host: BleHost, namespace: MeshNamespace) {
         self.host = host
+        serviceUUID = CBUUID(nsuuid: namespace.bleServiceUUID)
         super.init()
         central = CBCentralManager(delegate: self, queue: nil,
                                    options: [CBCentralManagerOptionRestoreIdentifierKey: "org.saveoursoul.central"])

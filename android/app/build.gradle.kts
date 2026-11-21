@@ -14,8 +14,41 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        // Default backend; can be changed in the app's setup screen.
-        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://sos.example.org\"")
+    }
+
+    // One variant per environment, named like everywhere else (APP_ENV dev / qa / prod). They install
+    // side by side (different application ids), talk to their own backend, and use their own
+    // Bluetooth/Nearby namespace so dev and qa phones never carry real SOS traffic.
+    // e.g. `./gradlew installDevDebug`, `assembleQaRelease`, `assembleProdRelease`.
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "SOS Dev")
+            buildConfigField("String", "APP_ENV", "\"dev\"")
+            // The backend on your computer: 10.0.2.2 is the host machine as seen from the Android
+            // emulator. On a real phone, change it in the app to http://<your computer's LAN IP>:8080.
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://10.0.2.2:8080\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"DEV\"")
+        }
+        create("qa") {
+            dimension = "env"
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            resValue("string", "app_name", "SOS QA")
+            buildConfigField("String", "APP_ENV", "\"qa\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-qa.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"QA\"")
+        }
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "SaveOurSoul")
+            buildConfigField("String", "APP_ENV", "\"prod\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"PROD\"")
+        }
     }
 
     buildTypes {

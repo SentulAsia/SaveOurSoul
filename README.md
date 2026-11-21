@@ -29,7 +29,8 @@ spec is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 | Path | What |
 |---|---|
-| `backend/` | Node.js 22 + TypeScript API. Zero runtime dependencies; SQLite through `node:sqlite`. |
+| `backend/` | Node.js 22 + TypeScript API. PostgreSQL (`pg`) when deployed, built-in SQLite for local development. |
+| `render.yaml` | Render Blueprint for the qa and prod services. |
 | `android/core/` | Pure Kotlin: frame codec, relay policy, persistent outbox. Unit-tested on the JVM. |
 | `android/app/` | Android app (Kotlin, Jetpack Compose, Nearby Connections, WorkManager). |
 | `ios/SOSCore/` | Swift package: frame codec, relay policy, persistent outbox. `swift test` checks the shared vectors. |
@@ -41,17 +42,24 @@ spec is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 ```bash
 cd backend
 npm install
-RESPONDER_API_KEY=change-me npm start      # listens on :8080, stores data in ./sos.db
-npm test                                    # 14 tests: protocol, API, dedupe, auth, SSE
-npm run simulate -- http://localhost:8080 --kind medical   # pretend to be a phone
+RESPONDER_API_KEY=change-me npm start      # APP_ENV=dev: listens on :8080, data in ./sos.db (SQLite)
+npm test                                    # protocol, config and API tests on SQLite
+TEST_DATABASE_URL=postgres://… npm run test:pg   # same API suite on PostgreSQL (drops tables!)
+npm run simulate -- http://localhost:8080 --kind lost   # pretend to be a phone
 ```
+
+Three environments: **dev** runs on your computer with SQLite; **qa** and **prod** run on
+Render with PostgreSQL on Neon. See
+**[docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md)** and `render.yaml`.
 
 | Env var | Purpose |
 |---|---|
-| `RESPONDER_API_KEY` | **Required.** Bearer key for the dispatch/responder API. |
+| `APP_ENV` | `dev` (default), `qa` or `prod`. qa and prod refuse unsafe settings. |
+| `DATABASE_URL` | `postgres://…` connection string. Required for qa and prod; ignored in dev, which always uses SQLite. |
+| `RESPONDER_API_KEY` | **Required.** Bearer key for the dispatch/responder API (≥ 24 chars when deployed). |
 | `ENROLL_TOKEN` | Optional. If set, phones must present it to register. |
 | `SMS_WEBHOOK_TOKEN` | Optional. If set, the SMS webhook URL must include `?token=…`. |
-| `DATABASE_PATH`, `PORT` | Defaults: `sos.db`, `8080`. |
+| `DATABASE_PATH`, `PORT`, `DATABASE_POOL_MAX` | SQLite file for dev (`sos.db`), HTTP port (`8080`), Postgres pool size (`10`). |
 
 ### API
 
