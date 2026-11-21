@@ -11,3 +11,4 @@ ios/*.xcodeproj/
 ios/SOSCore/.build/
 ios/SaveOurSoul/Info.plist
 xcuserdata/
+.kotlin/
