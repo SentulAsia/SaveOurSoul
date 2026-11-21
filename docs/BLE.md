@@ -7,8 +7,8 @@ square kilometres. Android and iOS implement it identically:
 - `android/core/.../BleProtocol.kt`, `android/app/.../BleTransport.kt`
 - `ios/SOSCore/.../BleProtocol.swift`, `ios/SaveOurSoul/BleTransport.swift`
 
-Nearby Connections is still used where it works, mainly for higher bandwidth between Android
-phones. BLE is the baseline: it needs no pairing, works between Android and iOS, and keeps
+On Android, Nearby Connections is still used as well, mainly for higher bandwidth between
+Android phones. iOS uses BLE only. BLE is the baseline: it needs no pairing, works between Android and iOS, and keeps
 working in the background on both platforms.
 
 ## Why not just flood the mesh?

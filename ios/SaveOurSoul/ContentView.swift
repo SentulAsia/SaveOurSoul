@@ -151,7 +151,6 @@ private struct ChannelsView: View {
             row("Internet (Wi-Fi / cellular)", engine.internet)
             row("SMS", engine.sms)
             row("Bluetooth relay (works in crowds, no internet needed)", engine.ble)
-            row("Nearby phones (Bluetooth / Wi-Fi)", engine.mesh)
             if engine.pendingFrames > 0 { Text("\(engine.pendingFrames) signal(s) queued for delivery").font(.caption) }
             if engine.relayedForOthers > 0 { Text("Relayed \(engine.relayedForOthers) SOS signal(s) for people nearby").font(.caption) }
         }

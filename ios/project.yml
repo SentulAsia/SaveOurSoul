@@ -5,7 +5,7 @@ options:
   deploymentTarget:
     iOS: "16.0"
 # One Debug/Release pair per environment. Each installs side by side (own bundle id), talks to its
-# own backend and uses its own Bluetooth/Nearby namespace. Pick one with the matching scheme.
+# own backend and uses its own Bluetooth namespace. Pick one with the matching scheme.
 configs:
   Dev Debug: debug
   Dev Release: release
@@ -16,9 +16,6 @@ configs:
 packages:
   SOSCore:
     path: SOSCore
-  NearbyConnections:
-    url: https://github.com/google/nearby
-    branch: main  # pin to a release tag/revision before shipping
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     from: 11.6.0
@@ -29,8 +26,6 @@ targets:
     sources: [SaveOurSoul]
     dependencies:
       - package: SOSCore
-      - package: NearbyConnections
-        product: NearbyConnections
       - package: Firebase
         product: FirebaseAnalytics
     # Firebase config per environment lives in ios/Firebase/<Dev|QA|Prod>/GoogleService-Info.plist
@@ -57,7 +52,6 @@ targets:
           # the server URL in the app to http://<your Mac's LAN IP>:8080.
           SOS_BACKEND_URL: http://localhost:8080
           SOS_MESH_NAMESPACE: DEV
-          SOS_BONJOUR_SERVICE: _eaec558b7a99._tcp
           SOS_DISPLAY_NAME: SOS Dev
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.dev
         Dev Release: *dev
@@ -66,7 +60,6 @@ targets:
           SOS_FIREBASE_DIR: QA
           SOS_BACKEND_URL: https://saveoursoul-api-qa.onrender.com
           SOS_MESH_NAMESPACE: QA
-          SOS_BONJOUR_SERVICE: _5dbc4cc4193d._tcp
           SOS_DISPLAY_NAME: SOS QA
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.qa
         QA Release: *qa
@@ -75,7 +68,6 @@ targets:
           SOS_FIREBASE_DIR: Prod
           SOS_BACKEND_URL: https://saveoursoul-api.onrender.com
           SOS_MESH_NAMESPACE: PROD
-          SOS_BONJOUR_SERVICE: _19e735ef5c3e._tcp
           SOS_DISPLAY_NAME: SaveOurSoul
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios
         Prod Release: *prod
@@ -99,10 +91,7 @@ targets:
         NSLocationWhenInUseUsageDescription: Your location is sent with your SOS so responders can find you.
         NSLocationAlwaysAndWhenInUseUsageDescription: While an SOS is active your location keeps updating, even in the background.
         NSBluetoothAlwaysUsageDescription: Bluetooth lets your SOS reach nearby phones when there is no internet, and lets you relay theirs.
-        NSLocalNetworkUsageDescription: The local network lets your SOS reach nearby phones when there is no internet.
-        # Nearby Connections' Wi-Fi LAN medium advertises a Bonjour service derived from the
-        # environment's service id: "_" + first 12 hex chars of SHA-256(service id) + "._tcp".
-        NSBonjourServices: [$(SOS_BONJOUR_SERVICE)]
+        NSLocalNetworkUsageDescription: Dev builds talk to the SOS server running on your computer over the local network.
         UIBackgroundModes: [location, bluetooth-central, bluetooth-peripheral, fetch]
         BGTaskSchedulerPermittedIdentifiers: [org.saveoursoul.flush]
         # Analytics is opt-in (AppAnalytics.swift) and never used for advertising.

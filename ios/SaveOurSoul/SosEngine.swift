@@ -1,6 +1,5 @@
 import CoreLocation
 import Foundation
-import NearbyConnections
 import Network
 import SOSCore
 import UIKit
@@ -22,7 +21,7 @@ struct SmsRequest: Identifiable {
 /// Sends an SOS over every channel the iPhone has, the same way as the Android app:
 ///
 ///  1. The frame goes into a durable outbox before anything else.
-///  2. Internet (Wi-Fi, or cellular through Wi-Fi Assist) and the Nearby mesh fire at once.
+///  2. Internet (Wi-Fi, or cellular through Wi-Fi Assist) and the Bluetooth LE relay fire at once.
 ///  3. Contacts get a Messages sheet with a map link; if the backend hasn't confirmed within
 ///     the SMS delay, a second sheet sends the signed frame to the SMS gateway.
 ///  4. While active, location frames go out every 60 s and everything unconfirmed is retried,
@@ -42,7 +41,6 @@ final class SosEngine: ObservableObject {
     @Published private(set) var kind: SosKind = .general
     @Published private(set) var internet = ChannelState()
     @Published private(set) var sms = ChannelState()
-    @Published private(set) var mesh = ChannelState()
     @Published private(set) var ble = ChannelState()
     @Published private(set) var responderStatus: String?
     @Published private(set) var lastFix: CLLocation?
@@ -58,7 +56,6 @@ final class SosEngine: ObservableObject {
     let credentials = DeviceCredentials()
     private(set) lazy var backend = BackendClient { [settings] in settings.backendUrl }
     private let location = LocationProvider()
-    private let meshTransport = MeshTransport(namespace: AppEnvironment.meshNamespace)
     private let seen = SeenCache()
     private lazy var relayPolicy = RelayPolicy(seen: seen)
     private let outbox: Outbox
@@ -81,9 +78,6 @@ final class SosEngine: ObservableObject {
         outbox = Outbox(url: dir.appendingPathComponent("outbox.json"))
         enrolled = credentials.isEnrolled
 
-        meshTransport.onPayload = { [weak self] id, data in self?.onFramesFromPeers(FrameCodec.split(data), source: "nearby:" + id) }
-        meshTransport.framesToShare = { [weak self] in self?.outbox.unconfirmed().map(\.frame) ?? [] }
-        meshTransport.onPeersChanged = { [weak self] n in self?.updateMeshState(peers: n) }
 
         // Retry the moment any network becomes usable.
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -127,7 +121,7 @@ final class SosEngine: ObservableObject {
     }
 
     func onBackground() {
-        // Nearby stops in the background unless an SOS keeps us alive; BLE carries on.
+        // BLE keeps relaying in the background; only the screen-awake setting changes.
         updateMeshRunning(foreground: false)
     }
 
@@ -197,7 +191,6 @@ final class SosEngine: ObservableObject {
         _ = seen.firstSeen(frame.frameId) // ignore our own frame when peers echo it back
         outbox.add(bytes, own: true)
         if let fix { lastFix = fix }
-        meshTransport.broadcast([bytes])
         refreshPending()
         Task { await flush() }
         return bytes
@@ -362,7 +355,7 @@ final class SosEngine: ObservableObject {
         AppAnalytics.event(event, p)
     }
 
-    /// Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload.
+    /// Frames from a nearby phone over Bluetooth LE: queue, pass on, upload.
     private func onFramesFromPeers(_ frames: [Data], source: String) {
         let fresh = frames.compactMap { raw -> Data? in
             guard case let .relay(frame) = relayPolicy.onFrameFromPeer(raw) else { return nil }
@@ -371,7 +364,6 @@ final class SosEngine: ObservableObject {
         guard !fresh.isEmpty else { return }
         relayedForOthers += fresh.count
         AppAnalytics.event("relay_carried", ["frames": fresh.count, "via": String(source.prefix { $0 != ":" })])
-        meshTransport.broadcast(fresh, except: source.hasPrefix("nearby:") ? String(source.dropFirst(7)) : nil)
         refreshPending()
         bleTransport.refresh()
         Task { await flush() }
@@ -399,8 +391,6 @@ final class SosEngine: ObservableObject {
     }
 
     func updateMeshRunning(foreground: Bool = true) {
-        if isActive || (settings.relayEnabled && foreground) { meshTransport.start() } else { meshTransport.stop() }
-        updateMeshState(peers: nil)
         // BLE keeps working in the background (bluetooth-central/peripheral modes), so relay mode
         // keeps it on even when the app is not open.
         if isActive || settings.relayEnabled {
@@ -416,18 +406,6 @@ final class SosEngine: ObservableObject {
         // Android phones only see an iPhone's BLE advert while the app is in the foreground:
         // keep the screen awake while an SOS is active and the app is open.
         UIApplication.shared.isIdleTimerDisabled = isActive && foreground
-    }
-
-    private func updateMeshState(peers: Int?) {
-        if !meshTransport.running {
-            mesh = ChannelState(health: .idle, detail: "off")
-        } else if let peers, peers > 0 {
-            mesh = ChannelState(health: .ok, detail: "\(peers) phone(s) nearby")
-        } else if peers == nil, mesh.health == .ok {
-            return
-        } else {
-            mesh = ChannelState(health: .working, detail: "searching for nearby phones…")
-        }
     }
 
     private func refreshPending() { pendingFrames = outbox.unconfirmed().count }
