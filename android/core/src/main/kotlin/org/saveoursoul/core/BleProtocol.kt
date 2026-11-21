@@ -20,13 +20,13 @@ import java.util.UUID
  *  - CONFIRMED (read):  receipts this phone has collected, n × 24 bytes.
  */
 /**
- * Each environment gets its own radio namespace, so phones running a dev or test build never
- * exchange frames with production phones (a test phone would otherwise pick up a real pilgrim's
+ * Each environment gets its own radio namespace, so phones running a dev or qa build never
+ * exchange frames with production phones (a dev or qa phone would otherwise pick up a real pilgrim's
  * SOS and hand it to the wrong backend, which rejects it).
  */
 enum class MeshNamespace(val bleServiceUuid: UUID, val nearbyServiceId: String) {
     PROD(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a0e"), "org.saveoursoul.sos.v1"),
-    TEST(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a7e"), "org.saveoursoul.sos.v1.test"),
+    QA(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a7e"), "org.saveoursoul.sos.v1.qa"),
     DEV(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115ade"), "org.saveoursoul.sos.v1.dev"),
 }
 

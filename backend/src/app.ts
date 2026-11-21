@@ -14,7 +14,7 @@ export interface AppConfig {
   smsWebhookToken?: string;
   /** Max frames per /signals request (relays upload in batches). */
   maxBatch?: number;
-  /** dev | test | prod (reported by /healthz). */
+  /** dev | qa | prod (reported by /healthz). */
   environment?: string;
   /** Unix-seconds clock, injectable for tests. */
   clock?: () => number;

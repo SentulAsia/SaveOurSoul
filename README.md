@@ -30,7 +30,7 @@ spec is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 | Path | What |
 |---|---|
 | `backend/` | Node.js 22 + TypeScript API. PostgreSQL (`pg`) when deployed, built-in SQLite for local development. |
-| `render.yaml` | Render Blueprint for the test and prod services. |
+| `render.yaml` | Render Blueprint for the qa and prod services. |
 | `android/core/` | Pure Kotlin: frame codec, relay policy, persistent outbox. Unit-tested on the JVM. |
 | `android/app/` | Android app (Kotlin, Jetpack Compose, Nearby Connections, WorkManager). |
 | `ios/SOSCore/` | Swift package: frame codec, relay policy, persistent outbox. `swift test` checks the shared vectors. |
@@ -48,14 +48,14 @@ TEST_DATABASE_URL=postgres://… npm run test:pg   # same API suite on PostgreSQ
 npm run simulate -- http://localhost:8080 --kind lost   # pretend to be a phone
 ```
 
-Three environments: **dev** runs on your computer with SQLite; **test** and **prod** run on
+Three environments: **dev** runs on your computer with SQLite; **qa** and **prod** run on
 Render with PostgreSQL on Neon. See
 **[docs/ENVIRONMENTS.md](docs/ENVIRONMENTS.md)** and `render.yaml`.
 
 | Env var | Purpose |
 |---|---|
-| `APP_ENV` | `dev` (default), `test` or `prod`. test and prod refuse unsafe settings. |
-| `DATABASE_URL` | `postgres://…` connection string. Required for test and prod; ignored in dev, which always uses SQLite. |
+| `APP_ENV` | `dev` (default), `qa` or `prod`. qa and prod refuse unsafe settings. |
+| `DATABASE_URL` | `postgres://…` connection string. Required for qa and prod; ignored in dev, which always uses SQLite. |
 | `RESPONDER_API_KEY` | **Required.** Bearer key for the dispatch/responder API (≥ 24 chars when deployed). |
 | `ENROLL_TOKEN` | Optional. If set, phones must present it to register. |
 | `SMS_WEBHOOK_TOKEN` | Optional. If set, the SMS webhook URL must include `?token=…`. |

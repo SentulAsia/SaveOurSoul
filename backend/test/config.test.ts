@@ -18,8 +18,8 @@ test("dev never connects to PostgreSQL, even if DATABASE_URL is set", () => {
   assert.match(warnings[0]!, /ignored/);
 });
 
-test("test and prod require a PostgreSQL DATABASE_URL and a strong responder key", () => {
-  for (const env of ["test", "prod"]) {
+test("qa and prod require a PostgreSQL DATABASE_URL and a strong responder key", () => {
+  for (const env of ["qa", "prod"]) {
     assert.throws(() => loadConfig({ APP_ENV: env, RESPONDER_API_KEY: KEY }), ConfigError);
     assert.throws(() => loadConfig({ APP_ENV: env, RESPONDER_API_KEY: KEY, DATABASE_URL: "sos.db" }), /PostgreSQL/);
     assert.throws(() => loadConfig({ APP_ENV: env, RESPONDER_API_KEY: "short", DATABASE_URL: PG }), /24 characters/);
@@ -35,7 +35,7 @@ test("prod warns about open enrollment and an unprotected SMS webhook", () => {
 });
 
 test("rejects unknown environments, including the old long names", () => {
-  for (const name of ["staging", "development", "testing", "production"]) {
+  for (const name of ["staging", "test", "development", "testing", "production"]) {
     assert.throws(() => loadConfig({ APP_ENV: name, RESPONDER_API_KEY: KEY, DATABASE_URL: PG }), /APP_ENV/);
   }
 });

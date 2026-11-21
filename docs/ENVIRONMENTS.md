@@ -1,31 +1,31 @@
-# Environments: dev, test, prod
+# Environments: dev, qa, prod
 
-| | dev | test | prod |
+The same three names are used everywhere: backend `APP_ENV`, Render, Neon, git, the Android
+build variants, the iOS schemes and the Bluetooth/Nearby namespaces.
+
+| | dev | qa | prod |
 |---|---|---|---|
 | Purpose | day-to-day work on your computer | field trials and QA before release | real pilgrims |
-| Runs on | your laptop | Render `saveoursoul-api-test` | Render `saveoursoul-api` |
-| Database | **SQLite** file (`backend/sos.db`) | **PostgreSQL**, Neon branch `test` | **PostgreSQL**, Neon branch `production` |
-| `APP_ENV` | `dev` (the default) | `test` | `prod` |
-| Git branch that deploys | — | `test` | `main` |
-| Android variant | `devDebug` ("SOS Dev") | `qaDebug` / `qaRelease` ("SOS Test") ¹ | `prodDebug` / `prodRelease` ("SaveOurSoul") |
-| iOS scheme | `SaveOurSoul Dev` | `SaveOurSoul Test` | `SaveOurSoul` |
-| App's default server | your computer, `:8080` | test service URL | prod service URL |
-| Bluetooth/Nearby namespace | DEV | TEST | PROD |
-
-¹ Android doesn't allow build flavors whose names start with "test", so the test environment's
-flavor is called `qa`. It still reports `APP_ENV=test`.
+| Runs on | your laptop | Render `saveoursoul-api-qa` | Render `saveoursoul-api` |
+| Database | **SQLite** file (`backend/sos.db`) | **PostgreSQL**, Neon branch `qa` | **PostgreSQL**, Neon branch `production` |
+| `APP_ENV` | `dev` (the default) | `qa` | `prod` |
+| Git branch that deploys | — | `qa` | `main` |
+| Android variant | `devDebug` ("SOS Dev") | `qaDebug` / `qaRelease` ("SOS QA") | `prodDebug` / `prodRelease` ("SaveOurSoul") |
+| iOS scheme | `SaveOurSoul Dev` | `SaveOurSoul QA` | `SaveOurSoul` |
+| App's default server | your computer, `:8080` | qa service URL | prod service URL |
+| Bluetooth/Nearby namespace | DEV | QA | PROD |
 
 **dev always uses SQLite.** Even if `DATABASE_URL` is set, `APP_ENV=dev` ignores it (with a warning),
-so a laptop can never write to the test or production database by accident.
+so a laptop can never write to the qa or prod database by accident.
 
-**test and prod always use PostgreSQL.** They refuse to start without a PostgreSQL `DATABASE_URL`,
+**qa and prod always use PostgreSQL.** They refuse to start without a PostgreSQL `DATABASE_URL`,
 because a SQLite file on Render would be wiped on every deploy.
 
-**Separate radio namespaces.** Phones running a dev or test build use different Bluetooth service
-UUIDs and Nearby service ids. They never pick up a real pilgrim's SOS, and test SOS signals never
+**Separate radio namespaces.** Phones running a dev or qa build use different Bluetooth service
+UUIDs and Nearby service ids. They never pick up a real pilgrim's SOS, and dev/qa SOS signals never
 reach production phones.
 
-Code moves one way: feature branch → `test` → `main`, through pull requests. Merging into `test`
+Code moves one way: feature branch → `qa` → `main`, through pull requests. Merging into `qa`
 or `main` deploys automatically.
 
 ## dev: run everything on your computer
@@ -43,41 +43,41 @@ Delete `backend/sos.db` to start from an empty database.
 * **iOS simulator:** run the `SaveOurSoul Dev` scheme. It points to `http://localhost:8080`.
 * **Real phones** (needed for Bluetooth): put the phone on the same Wi-Fi network as your computer,
   then in the app's registration screen set the server URL to `http://<your computer's LAN IP>:8080`.
-  Dev builds allow plain HTTP; test and prod builds are HTTPS only.
+  Dev builds allow plain HTTP; qa and prod builds are HTTPS only.
 
-## One-time setup for test and prod
+## One-time setup for qa and prod
 
-### 1. Neon: a database branch for test
+### 1. Neon: a database branch for qa
 
 The project `SaveOurSoul` (Singapore) already has the `production` branch, which prod uses.
 
-1. Neon console → **Branches** → **Create branch** → name `test`, parent `production`.
-2. For each of `test` and `production`: **Connect** → select the branch → turn on
+1. Neon console → **Branches** → **Create branch** → name `qa`, parent `production`.
+2. For each of `qa` and `production`: **Connect** → select the branch → turn on
    **Connection pooling** → **Copy snippet**. Never put these strings in git or chat.
 
 The backend creates its tables on first start.
 
-### 2. Git: the branch that feeds test
+### 2. Git: the branch that feeds qa
 
 ```bash
 git checkout main && git pull
-git checkout -b test && git push -u origin test
+git checkout -b qa && git push -u origin qa
 ```
 
-On GitHub, consider protecting `main` and `test` (Settings → Branches) so they only change through
+On GitHub, consider protecting `main` and `qa` (Settings → Branches) so they only change through
 reviewed pull requests with green CI.
 
 ### 3. Render: deploy both from the Blueprint
 
 1. Render dashboard → **New** → **Blueprint** → choose this repository. Render reads `render.yaml`.
-2. Paste each `DATABASE_URL`: the Neon `test` string → `saveoursoul-api-test`, the `production`
+2. Paste each `DATABASE_URL`: the Neon `qa` string → `saveoursoul-api-qa`, the `production`
    string → `saveoursoul-api`.
 3. Render generates `RESPONDER_API_KEY`, `ENROLL_TOKEN` and `SMS_WEBHOOK_TOKEN`. Read them in each
    service's **Environment** tab when you need them.
-4. Open `<service URL>/healthz` for each. It should return `{"ok":true,"env":"test","db":"postgres"}`
+4. Open `<service URL>/healthz` for each. It should return `{"ok":true,"env":"qa","db":"postgres"}`
    (or `"prod"`).
 
-If Render assigns different URLs than `https://saveoursoul-api-test.onrender.com` and
+If Render assigns different URLs than `https://saveoursoul-api-qa.onrender.com` and
 `https://saveoursoul-api.onrender.com`, update them in `android/app/build.gradle.kts`
 (productFlavors) and `ios/project.yml` (`SOS_BACKEND_URL`).
 
@@ -93,8 +93,8 @@ Point the SMS number for each environment at
 ## Tests and schema changes
 
 * `npm test` runs on SQLite. `TEST_DATABASE_URL=postgres://… npm run test:pg` runs the same API
-  suite on PostgreSQL. **Never point it at test or prod: it drops the tables.** CI runs both,
+  suite on PostgreSQL. **Never point it at qa or prod: it drops the tables.** CI runs both,
   against a throwaway Postgres.
 * To change the schema, append a new entry to `migrations()` in `backend/src/store.ts` (never edit
-  a released one). It runs locally on SQLite first, then on test and prod when the code is
+  a released one). It runs locally on SQLite first, then on qa and prod when the code is
   deployed there.

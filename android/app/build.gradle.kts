@@ -16,10 +16,10 @@ android {
         versionName = "0.1.0"
     }
 
-    // One variant per environment (APP_ENV dev / test / prod). They install side by side (different
-    // application ids), talk to their own backend, and use their own Bluetooth/Nearby namespace so
-    // test phones never carry real SOS traffic. Android forbids flavor names starting with "test",
-    // so the test environment's flavor is called "qa": `./gradlew installQaDebug`.
+    // One variant per environment, named like everywhere else (APP_ENV dev / qa / prod). They install
+    // side by side (different application ids), talk to their own backend, and use their own
+    // Bluetooth/Nearby namespace so dev and qa phones never carry real SOS traffic.
+    // e.g. `./gradlew installDevDebug`, `assembleQaRelease`, `assembleProdRelease`.
     flavorDimensions += "env"
     productFlavors {
         create("dev") {
@@ -35,12 +35,12 @@ android {
         }
         create("qa") {
             dimension = "env"
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
-            resValue("string", "app_name", "SOS Test")
-            buildConfigField("String", "APP_ENV", "\"test\"")
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-test.onrender.com\"")
-            buildConfigField("String", "MESH_NAMESPACE", "\"TEST\"")
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            resValue("string", "app_name", "SOS QA")
+            buildConfigField("String", "APP_ENV", "\"qa\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-qa.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"QA\"")
         }
         create("prod") {
             dimension = "env"

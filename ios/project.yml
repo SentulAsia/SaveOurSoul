@@ -9,8 +9,8 @@ options:
 configs:
   Dev Debug: debug
   Dev Release: release
-  Test Debug: debug
-  Test Release: release
+  QA Debug: debug
+  QA Release: release
   Prod Debug: debug
   Prod Release: release
 packages:
@@ -40,14 +40,14 @@ targets:
           SOS_DISPLAY_NAME: SOS Dev
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.dev
         Dev Release: *dev
-        Test Debug: &test
-          SOS_ENV: test
-          SOS_BACKEND_URL: https://saveoursoul-api-test.onrender.com
-          SOS_MESH_NAMESPACE: TEST
-          SOS_BONJOUR_SERVICE: _ffb76b84f00c._tcp
-          SOS_DISPLAY_NAME: SOS Test
-          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.test
-        Test Release: *test
+        QA Debug: &qa
+          SOS_ENV: qa
+          SOS_BACKEND_URL: https://saveoursoul-api-qa.onrender.com
+          SOS_MESH_NAMESPACE: QA
+          SOS_BONJOUR_SERVICE: _5dbc4cc4193d._tcp
+          SOS_DISPLAY_NAME: SOS QA
+          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.qa
+        QA Release: *qa
         Prod Debug: &prod
           SOS_ENV: prod
           SOS_BACKEND_URL: https://saveoursoul-api.onrender.com
@@ -97,20 +97,20 @@ schemes:
       config: Prod Debug
     archive:
       config: Prod Release
-  SaveOurSoul Test:
+  SaveOurSoul QA:
     build:
       targets:
         SaveOurSoul: all
     run:
-      config: Test Debug
+      config: QA Debug
     test:
-      config: Test Debug
+      config: QA Debug
     profile:
-      config: Test Release
+      config: QA Release
     analyze:
-      config: Test Debug
+      config: QA Debug
     archive:
-      config: Test Release
+      config: QA Release
   SaveOurSoul Dev:
     build:
       targets:

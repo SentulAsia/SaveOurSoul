@@ -4,7 +4,7 @@ import pg from "pg";
 /**
  * A tiny async SQL layer over two engines:
  *  - SQLite (node:sqlite) for APP_ENV=dev (your computer) and the default test run;
- *  - PostgreSQL (e.g. Neon) for APP_ENV=test and APP_ENV=prod on Render.
+ *  - PostgreSQL (e.g. Neon) for APP_ENV=qa and APP_ENV=prod on Render.
  *
  * Queries are written once with `?` placeholders in the common subset of both dialects.
  */

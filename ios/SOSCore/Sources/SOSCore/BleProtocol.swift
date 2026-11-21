@@ -72,13 +72,13 @@ public final class AckLedger: @unchecked Sendable {
 /// phones never exchange frames with production (prod) phones.
 public enum MeshNamespace: String, CaseIterable, Sendable {
     case prod = "PROD"
-    case test = "TEST"
+    case qa = "QA"
     case dev = "DEV"
 
     public var bleServiceUUID: UUID {
         switch self {
         case .prod: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a0e")!
-        case .test: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a7e")!
+        case .qa: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a7e")!
         case .dev: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115ade")!
         }
     }
@@ -86,7 +86,7 @@ public enum MeshNamespace: String, CaseIterable, Sendable {
     public var nearbyServiceId: String {
         switch self {
         case .prod: return "org.saveoursoul.sos.v1"
-        case .test: return "org.saveoursoul.sos.v1.test"
+        case .qa: return "org.saveoursoul.sos.v1.qa"
         case .dev: return "org.saveoursoul.sos.v1.dev"
         }
     }

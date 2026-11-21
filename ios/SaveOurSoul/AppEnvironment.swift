@@ -7,7 +7,7 @@ enum AppEnvironment {
         (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    /// dev | test | prod
+    /// dev | qa | prod
     static let name = info("SOSEnvironment") ?? "prod"
     static let defaultBackendURL = info("SOSBackendURL") ?? "https://saveoursoul-api.onrender.com"
     static let meshNamespace = info("SOSMeshNamespace").flatMap(MeshNamespace.init(rawValue:)) ?? .prod

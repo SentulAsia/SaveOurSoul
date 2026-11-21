@@ -4,18 +4,18 @@
  * | APP_ENV | Database                          | Where it runs                 |
  * |---------|-----------------------------------|-------------------------------|
  * | dev     | SQLite file (always)              | your laptop                   |
- * | test    | PostgreSQL (Neon "test" branch)   | Render "saveoursoul-api-test" |
+ * | qa      | PostgreSQL (Neon "qa" branch)     | Render "saveoursoul-api-qa"   |
  * | prod    | PostgreSQL (Neon "production")    | Render "saveoursoul-api"      |
  *
- * dev never connects to PostgreSQL, so a laptop cannot touch test or production data by accident.
- * test and prod refuse to start with unsafe settings instead of running half-configured.
+ * dev never connects to PostgreSQL, so a laptop cannot touch qa or prod data by accident.
+ * qa and prod refuse to start with unsafe settings instead of running half-configured.
  */
-export const Environments = ["dev", "test", "prod"] as const;
+export const Environments = ["dev", "qa", "prod"] as const;
 export type Environment = (typeof Environments)[number];
 
 export interface Config {
   environment: Environment;
-  /** postgres://… (test, prod) or a SQLite path (dev). */
+  /** postgres://… (qa, prod) or a SQLite path (dev). */
   database: string;
   responderApiKey: string;
   enrollToken?: string;
