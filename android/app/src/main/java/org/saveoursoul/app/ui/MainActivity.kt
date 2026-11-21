@@ -119,6 +119,8 @@ private fun App(engine: SosEngine) {
         state.error?.let { ErrorBanner(it) { engine.dismissError() } }
         if (state.isActive) ActiveSos(state) else IdleSos(state)
         ChannelPanel(state)
+        // Below the SOS button on purpose: a first-time prompt must never push the button down.
+        if (!state.isActive) AnalyticsConsentCard(engine.analytics)
         if (!enrolled) EnrollCard(engine) { enrolled = true }
         SettingsCard(engine)
     }
@@ -288,6 +290,7 @@ private fun EnrollCard(engine: SosEngine, onDone: () -> Unit) {
                         settings.userName = name
                         val e = BackendClient { settings.backendUrl }.enroll(name.ifBlank { Build.MODEL }, phone, token.ifBlank { null })
                         engine.credentials.store(e.deviceId, e.secret)
+                        engine.analytics.event("device_registered")
                         onDone()
                     } catch (e: Exception) {
                         error = "Registration failed: ${e.message}"
@@ -308,6 +311,7 @@ private fun SettingsCard(engine: SosEngine) {
     var delaySec by remember { mutableStateOf(s.smsFallbackDelaySec.toString()) }
     var relay by remember { mutableStateOf(s.relayEnabled) }
     var relaySms by remember { mutableStateOf(s.relayViaSms) }
+    var analytics by remember { mutableStateOf(engine.analytics.consent == true) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     Card(Modifier.fillMaxWidth()) {
@@ -327,6 +331,33 @@ private fun SettingsCard(engine: SosEngine) {
                 engine.updateMeshRunning()
             }
             SwitchRow("Allow relaying strangers' SOS by SMS when offline (uses your SMS)", relaySms) { relaySms = it; s.relayViaSms = it }
+            if (engine.analytics.available) {
+                SwitchRow("Share anonymous usage statistics (never your location or messages)", analytics) {
+                    analytics = it
+                    engine.analytics.consent = it
+                }
+            }
+        }
+    }
+}
+
+/** Asked once, only in builds that have Firebase configured. Nothing is collected before a "yes". */
+@Composable
+private fun AnalyticsConsentCard(analytics: org.saveoursoul.app.Analytics) {
+    var asked by remember { mutableStateOf(analytics.consent != null) }
+    if (asked || !analytics.available) return
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Help improve SaveOurSoul", fontWeight = FontWeight.Bold)
+            Text(
+                "Share anonymous statistics such as which channel delivered an SOS and how long it took. " +
+                    "Never your location, name, phone number or messages. You can change this in Settings.",
+                fontSize = 13.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { analytics.consent = true; asked = true }) { Text("Share statistics") }
+                OutlinedButton(onClick = { analytics.consent = false; asked = true }) { Text("No thanks") }
+            }
         }
     }
 }

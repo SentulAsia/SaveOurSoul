@@ -19,6 +19,9 @@ packages:
   NearbyConnections:
     url: https://github.com/google/nearby
     branch: main  # pin to a release tag/revision before shipping
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 11.6.0
 targets:
   SaveOurSoul:
     type: application
@@ -28,10 +31,28 @@ targets:
       - package: SOSCore
       - package: NearbyConnections
         product: NearbyConnections
+      - package: Firebase
+        product: FirebaseAnalytics
+    # Firebase config per environment lives in ios/Firebase/<Dev|QA|Prod>/GoogleService-Info.plist
+    # (not committed). Missing file → the app runs without analytics.
+    postBuildScripts:
+      - name: Copy Firebase config for this environment
+        basedOnDependencyAnalysis: false
+        script: |
+          SRC="${PROJECT_DIR}/Firebase/${SOS_FIREBASE_DIR}/GoogleService-Info.plist"
+          DST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "$DST"
+            echo "Firebase config: ${SOS_FIREBASE_DIR}"
+          else
+            rm -f "$DST"
+            echo "note: no Firebase/${SOS_FIREBASE_DIR}/GoogleService-Info.plist, analytics disabled in this build"
+          fi
     settings:
       configs:
         Dev Debug: &dev
           SOS_ENV: dev
+          SOS_FIREBASE_DIR: Dev
           # The backend on your Mac (the simulator shares its network). On a real iPhone, change
           # the server URL in the app to http://<your Mac's LAN IP>:8080.
           SOS_BACKEND_URL: http://localhost:8080
@@ -42,6 +63,7 @@ targets:
         Dev Release: *dev
         QA Debug: &qa
           SOS_ENV: qa
+          SOS_FIREBASE_DIR: QA
           SOS_BACKEND_URL: https://saveoursoul-api-qa.onrender.com
           SOS_MESH_NAMESPACE: QA
           SOS_BONJOUR_SERVICE: _5dbc4cc4193d._tcp
@@ -50,6 +72,7 @@ targets:
         QA Release: *qa
         Prod Debug: &prod
           SOS_ENV: prod
+          SOS_FIREBASE_DIR: Prod
           SOS_BACKEND_URL: https://saveoursoul-api.onrender.com
           SOS_MESH_NAMESPACE: PROD
           SOS_BONJOUR_SERVICE: _19e735ef5c3e._tcp
@@ -62,6 +85,8 @@ targets:
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
+        # The Firebase copy script reads a per-environment file outside the declared inputs.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
     info:
       path: SaveOurSoul/Info.plist
       properties:
@@ -80,6 +105,11 @@ targets:
         NSBonjourServices: [$(SOS_BONJOUR_SERVICE)]
         UIBackgroundModes: [location, bluetooth-central, bluetooth-peripheral, fetch]
         BGTaskSchedulerPermittedIdentifiers: [org.saveoursoul.flush]
+        # Analytics is opt-in (AppAnalytics.swift) and never used for advertising.
+        FIREBASE_ANALYTICS_COLLECTION_ENABLED: false
+        GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED: false
+        GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED: false
+        GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS: false
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
 schemes:

@@ -24,6 +24,7 @@ class SosApp : Application() {
         super.onCreate()
         val settings = Settings(this)
         val backend = BackendClient { settings.backendUrl }
+        val analytics = Analytics(this, settings).also { it.applyConsent() }
         engine = SosEngine(
             context = this,
             settings = settings,
@@ -34,6 +35,7 @@ class SosApp : Application() {
             location = LocationProvider(this),
             outbox = Outbox(File(noBackupFilesDir, "outbox.txt")),
             seen = SeenCache(),
+            analytics = analytics,
         )
         createNotificationChannels()
 

@@ -142,6 +142,12 @@ The iOS app works like the Android one and speaks the same protocol. Where iOS b
   builds) the mesh channel is off; internet and SMS still work.
 * The relay foreground service costs some battery. Users can turn relay mode off in settings.
 
+## Analytics
+
+Both apps include **opt-in, anonymous** Firebase Analytics, with one Firebase project per
+environment. It never collects location or personal data, never affects an SOS, and builds
+without the Firebase config files simply run without it. See [docs/ANALYTICS.md](docs/ANALYTICS.md).
+
 ## Hajj deployment (Arafat, Mina, Muzdalifah)
 
 Built for crowds where cellular is saturated:

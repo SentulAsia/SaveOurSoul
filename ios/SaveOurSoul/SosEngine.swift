@@ -72,6 +72,8 @@ final class SosEngine: ObservableObject {
     private var flushing = false
     private var smsQueue: [SmsRequest] = []
     private var lastGatewaySmsAt = Date.distantPast
+    /** Analytics milestones already reported for the active alert, so each is counted once. */
+    private var reported: Set<String> = []
 
     private init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -142,6 +144,8 @@ final class SosEngine: ObservableObject {
             error = "This phone isn't registered with the SOS server, so only your contacts can be texted."
         }
         let alertId = UUID()
+        reported.removeAll()
+        AppAnalytics.event("sos_triggered", ["kind": String(describing: kind), "registered": credentials.isEnrolled])
         settings.activeAlertId = alertId
         settings.activeKind = kind
         settings.activeSince = Date()
@@ -162,6 +166,7 @@ final class SosEngine: ObservableObject {
     func cancel() {
         guard let alertId = settings.activeAlertId else { return }
         let kind = settings.activeKind
+        AppAnalytics.event("sos_cancelled", ["time_bucket": AppAnalytics.timeBucket(sinceActive)])
         settings.activeAlertId = nil
         activeLoop?.cancel()
         activeAlertId = nil
@@ -221,6 +226,7 @@ final class SosEngine: ObservableObject {
     private func pollResponder(_ alertId: UUID) async {
         guard let status = await backend.alertStatus(alertId) else { return }
         responderStatus = status.status
+        if status.status == "acknowledged" || status.status == "resolved" { milestone("sos_\(status.status)") }
         if status.status == "resolved", settings.activeAlertId == alertId {
             settings.activeAlertId = nil
             activeLoop?.cancel()
@@ -266,6 +272,7 @@ final class SosEngine: ObservableObject {
                 error = "The server rejected the signal (\(rejected.reason ?? "?")). Re-register this phone."
             } else {
                 internet = ChannelState(health: .ok, detail: "delivered to server")
+                if settings.activeAlertId != nil { milestone("sos_delivered", ["channel": "internet"]) }
             }
             if let s = results.last(where: { $0.alertStatus != nil })?.alertStatus { responderStatus = s }
         } catch {
@@ -320,9 +327,13 @@ final class SosEngine: ObservableObject {
     func smsFinished(_ request: SmsRequest, sent: Bool) {
         switch request.purpose {
         case .gateway(let ids):
-            if sent { outbox.markSmsSent(ids) }
+            if sent {
+                outbox.markSmsSent(ids)
+                AppAnalytics.event("sos_sms_sent", ["to": "gateway"])
+            }
             sms = ChannelState(health: sent ? .ok : .failed, detail: sent ? "sent to SMS gateway" : "SMS not sent")
         case .contacts:
+            if sent { AppAnalytics.event("sos_sms_sent", ["to": "contacts"]) }
             sms = ChannelState(health: sent ? .ok : .failed, detail: sent ? "contacts texted" : "contacts not texted")
         }
         smsRequest = nil
@@ -340,6 +351,17 @@ final class SosEngine: ObservableObject {
 
     // MARK: - relay
 
+    private var sinceActive: TimeInterval { Date().timeIntervalSince(settings.activeSince ?? Date()) }
+
+    /// Reports an SOS milestone once per alert, with the time since the SOS started.
+    private func milestone(_ event: String, _ params: [String: Any] = [:]) {
+        guard reported.insert(event).inserted else { return }
+        var p = params
+        p["kind"] = String(describing: settings.activeKind)
+        p["time_bucket"] = AppAnalytics.timeBucket(sinceActive)
+        AppAnalytics.event(event, p)
+    }
+
     /// Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload.
     private func onFramesFromPeers(_ frames: [Data], source: String) {
         let fresh = frames.compactMap { raw -> Data? in
@@ -348,6 +370,7 @@ final class SosEngine: ObservableObject {
         }
         guard !fresh.isEmpty else { return }
         relayedForOthers += fresh.count
+        AppAnalytics.event("relay_carried", ["frames": fresh.count, "via": String(source.prefix { $0 != ":" })])
         meshTransport.broadcast(fresh, except: source.hasPrefix("nearby:") ? String(source.dropFirst(7)) : nil)
         refreshPending()
         bleTransport.refresh()
@@ -368,6 +391,7 @@ final class SosEngine: ObservableObject {
         outbox.markConfirmed(accepted.map(\.frameId))
         accepted.forEach(ackLedger.add)
         if accepted.contains(where: { outbox.entry($0.frameId)?.own == true }) {
+            if settings.activeAlertId != nil { milestone("sos_delivered", ["channel": "bluetooth"]) }
             ble = ChannelState(health: .ok, detail: "delivered through a nearby phone")
         }
         refreshPending()
