@@ -140,7 +140,7 @@ final class BleProtocolTests: XCTestCase {
     func testNamespacesAreDistinct() {
         XCTAssertEqual(Set(MeshNamespace.allCases.map(\.bleServiceUUID)).count, 3)
         XCTAssertEqual(Set(MeshNamespace.allCases.map(\.nearbyServiceId)).count, 3)
-        XCTAssertEqual(MeshNamespace.production.bleServiceUUID, BleProtocol.serviceUUID)
+        XCTAssertEqual(MeshNamespace.prod.bleServiceUUID, BleProtocol.serviceUUID)
     }
 
     func testDigestOrderIndependent() {

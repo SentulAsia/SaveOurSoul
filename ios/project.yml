@@ -9,8 +9,8 @@ options:
 configs:
   Dev Debug: debug
   Dev Release: release
-  Testing Debug: debug
-  Testing Release: release
+  Test Debug: debug
+  Test Release: release
   Prod Debug: debug
   Prod Release: release
 packages:
@@ -31,25 +31,27 @@ targets:
     settings:
       configs:
         Dev Debug: &dev
-          SOS_ENV: development
-          SOS_BACKEND_URL: https://saveoursoul-api-dev.onrender.com
+          SOS_ENV: dev
+          # The backend on your Mac (the simulator shares its network). On a real iPhone, change
+          # the server URL in the app to http://<your Mac's LAN IP>:8080.
+          SOS_BACKEND_URL: http://localhost:8080
           SOS_MESH_NAMESPACE: DEV
           SOS_BONJOUR_SERVICE: _eaec558b7a99._tcp
           SOS_DISPLAY_NAME: SOS Dev
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.dev
         Dev Release: *dev
-        Testing Debug: &testing
-          SOS_ENV: testing
-          SOS_BACKEND_URL: https://saveoursoul-api-testing.onrender.com
-          SOS_MESH_NAMESPACE: TESTING
-          SOS_BONJOUR_SERVICE: _4fc764215c71._tcp
-          SOS_DISPLAY_NAME: SOS Testing
-          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.testing
-        Testing Release: *testing
+        Test Debug: &test
+          SOS_ENV: test
+          SOS_BACKEND_URL: https://saveoursoul-api-test.onrender.com
+          SOS_MESH_NAMESPACE: TEST
+          SOS_BONJOUR_SERVICE: _ffb76b84f00c._tcp
+          SOS_DISPLAY_NAME: SOS Test
+          PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios.test
+        Test Release: *test
         Prod Debug: &prod
-          SOS_ENV: production
+          SOS_ENV: prod
           SOS_BACKEND_URL: https://saveoursoul-api.onrender.com
-          SOS_MESH_NAMESPACE: PRODUCTION
+          SOS_MESH_NAMESPACE: PROD
           SOS_BONJOUR_SERVICE: _19e735ef5c3e._tcp
           SOS_DISPLAY_NAME: SaveOurSoul
           PRODUCT_BUNDLE_IDENTIFIER: org.saveoursoul.ios
@@ -95,20 +97,20 @@ schemes:
       config: Prod Debug
     archive:
       config: Prod Release
-  SaveOurSoul Testing:
+  SaveOurSoul Test:
     build:
       targets:
         SaveOurSoul: all
     run:
-      config: Testing Debug
+      config: Test Debug
     test:
-      config: Testing Debug
+      config: Test Debug
     profile:
-      config: Testing Release
+      config: Test Release
     analyze:
-      config: Testing Debug
+      config: Test Debug
     archive:
-      config: Testing Release
+      config: Test Release
   SaveOurSoul Dev:
     build:
       targets:

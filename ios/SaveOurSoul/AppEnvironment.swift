@@ -7,9 +7,9 @@ enum AppEnvironment {
         (Bundle.main.object(forInfoDictionaryKey: key) as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    /// development | testing | production
-    static let name = info("SOSEnvironment") ?? "production"
+    /// dev | test | prod
+    static let name = info("SOSEnvironment") ?? "prod"
     static let defaultBackendURL = info("SOSBackendURL") ?? "https://saveoursoul-api.onrender.com"
-    static let meshNamespace = info("SOSMeshNamespace").flatMap(MeshNamespace.init(rawValue:)) ?? .production
-    static var isProduction: Bool { name == "production" }
+    static let meshNamespace = info("SOSMeshNamespace").flatMap(MeshNamespace.init(rawValue:)) ?? .prod
+    static var isProduction: Bool { name == "prod" }
 }

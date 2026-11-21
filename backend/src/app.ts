@@ -14,7 +14,7 @@ export interface AppConfig {
   smsWebhookToken?: string;
   /** Max frames per /signals request (relays upload in batches). */
   maxBatch?: number;
-  /** development | testing | production (reported by /healthz). */
+  /** dev | test | prod (reported by /healthz). */
   environment?: string;
   /** Unix-seconds clock, injectable for tests. */
   clock?: () => number;
@@ -175,9 +175,9 @@ export function createApp(store: Store, ingestor: Ingestor, config: AppConfig) {
       // Render health checks hit this; a database outage must show up as unhealthy.
       try {
         await store.db.ping();
-        return send(res, 200, { ok: true, env: config.environment ?? "development", db: store.db.dialect });
+        return send(res, 200, { ok: true, env: config.environment ?? "dev", db: store.db.dialect });
       } catch {
-        return send(res, 503, { ok: false, env: config.environment ?? "development", error: "database unreachable" });
+        return send(res, 503, { ok: false, env: config.environment ?? "dev", error: "database unreachable" });
       }
     }
     if (method === "POST" && path === "/api/v1/devices") return enroll(req, res);

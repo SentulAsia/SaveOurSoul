@@ -113,7 +113,7 @@ private fun App(engine: SosEngine) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (BuildConfig.APP_ENV != "production") {
+        if (BuildConfig.APP_ENV != "prod") {
             Text("${BuildConfig.APP_ENV.uppercase()} BUILD · not for real emergencies", color = Color(0xFFFFB300), fontSize = 12.sp)
         }
         state.error?.let { ErrorBanner(it) { engine.dismissError() } }

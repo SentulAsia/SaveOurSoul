@@ -69,24 +69,24 @@ public final class AckLedger: @unchecked Sendable {
 }
 
 /// Per-environment radio namespace (same values as Android's MeshNamespace), so dev and testing
-/// phones never exchange frames with production phones.
+/// phones never exchange frames with production (prod) phones.
 public enum MeshNamespace: String, CaseIterable, Sendable {
-    case production = "PRODUCTION"
-    case testing = "TESTING"
+    case prod = "PROD"
+    case test = "TEST"
     case dev = "DEV"
 
     public var bleServiceUUID: UUID {
         switch self {
-        case .production: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a0e")!
-        case .testing: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a7e")!
+        case .prod: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a0e")!
+        case .test: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115a7e")!
         case .dev: return UUID(uuidString: "5a0e5011-0000-4c8a-9f3e-5a0e50115ade")!
         }
     }
 
     public var nearbyServiceId: String {
         switch self {
-        case .production: return "org.saveoursoul.sos.v1"
-        case .testing: return "org.saveoursoul.sos.v1.testing"
+        case .prod: return "org.saveoursoul.sos.v1"
+        case .test: return "org.saveoursoul.sos.v1.test"
         case .dev: return "org.saveoursoul.sos.v1.dev"
         }
     }
@@ -95,7 +95,7 @@ public enum MeshNamespace: String, CaseIterable, Sendable {
 /// SOS-BLE v1. Mirrors android/core/.../BleProtocol.kt; see docs/BLE.md.
 public enum BleProtocol {
     /// Production service UUID; see MeshNamespace for the other environments.
-    public static let serviceUUID = MeshNamespace.production.bleServiceUUID
+    public static let serviceUUID = MeshNamespace.prod.bleServiceUUID
     public static let inboxUUID = UUID(uuidString: "5a0e5011-0001-4c8a-9f3e-5a0e50115a0e")!
     public static let outboxUUID = UUID(uuidString: "5a0e5011-0002-4c8a-9f3e-5a0e50115a0e")!
     public static let acksUUID = UUID(uuidString: "5a0e5011-0003-4c8a-9f3e-5a0e50115a0e")!

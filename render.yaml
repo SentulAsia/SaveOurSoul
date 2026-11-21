@@ -1,25 +1,24 @@
-# Render Blueprint: three environments of the SOS backend, all in Singapore next to the Neon
-# database. Each deploys from its own git branch and connects to its own Neon branch.
+# Render Blueprint: the deployed environments of the SOS backend, in Singapore next to the Neon
+# database. (dev is not deployed: it runs on your laptop with SQLite, see docs/ENVIRONMENTS.md.)
 #
-#   environment   git branch   Render service              Neon branch
-#   development   develop      saveoursoul-api-dev         dev
-#   testing       testing      saveoursoul-api-testing     testing
-#   production    main         saveoursoul-api             production
+#   APP_ENV  git branch  Render service           Neon branch
+#   test     test        saveoursoul-api-test     test
+#   prod     main        saveoursoul-api          production
 #
 # Values marked `sync: false` are entered in the Render dashboard on first deploy (never commit
 # them). `generateValue` makes Render create a random secret you can read in the dashboard.
 #
-# PLANS: everything starts on the free plan. A free web service sleeps after ~15 minutes idle
-# and takes up to a minute to wake: acceptable for dev/testing, NOT for production emergencies.
-# Change production's plan to "starter" (or higher) before real users depend on it.
+# PLANS: both start on the free plan. A free web service sleeps after ~15 minutes idle and takes
+# up to a minute to wake: fine for test, NOT for real emergencies. Change prod's plan to
+# "starter" (or higher) before real users depend on it.
 
 services:
   - type: web
-    name: saveoursoul-api-dev
+    name: saveoursoul-api-test
     runtime: node
     region: singapore
     plan: free
-    branch: develop
+    branch: test
     rootDir: backend
     buildCommand: npm ci --omit=dev
     startCommand: npm start
@@ -27,27 +26,8 @@ services:
     autoDeploy: true
     envVars:
       - key: APP_ENV
-        value: development
-      - key: DATABASE_URL # Neon "dev" branch, pooled connection string
-        sync: false
-      - key: RESPONDER_API_KEY
-        generateValue: true
-
-  - type: web
-    name: saveoursoul-api-testing
-    runtime: node
-    region: singapore
-    plan: free
-    branch: testing
-    rootDir: backend
-    buildCommand: npm ci --omit=dev
-    startCommand: npm start
-    healthCheckPath: /healthz
-    autoDeploy: true
-    envVars:
-      - key: APP_ENV
-        value: testing
-      - key: DATABASE_URL # Neon "testing" branch, pooled connection string
+        value: test
+      - key: DATABASE_URL # Neon "test" branch, pooled connection string
         sync: false
       - key: RESPONDER_API_KEY
         generateValue: true
@@ -69,7 +49,7 @@ services:
     autoDeploy: true
     envVars:
       - key: APP_ENV
-        value: production
+        value: prod
       - key: DATABASE_URL # Neon "production" branch, pooled connection string
         sync: false
       - key: RESPONDER_API_KEY

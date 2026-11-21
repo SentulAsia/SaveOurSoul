@@ -6,5 +6,5 @@ COPY src ./src
 ENV NODE_ENV=production PORT=8080
 EXPOSE 8080
 USER node
-# Set APP_ENV, DATABASE_URL (postgres://…) and RESPONDER_API_KEY at run time.
+# Set APP_ENV (test or prod), DATABASE_URL (postgres://…) and RESPONDER_API_KEY at run time.
 CMD ["npm", "start"]

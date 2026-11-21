@@ -16,9 +16,10 @@ android {
         versionName = "0.1.0"
     }
 
-    // One variant per environment. They install side by side (different application ids), talk to
-    // their own backend, and use their own Bluetooth/Nearby namespace so test phones never carry
-    // real SOS traffic. Build e.g. `./gradlew assembleProdRelease` or `installDevDebug`.
+    // One variant per environment (APP_ENV dev / test / prod). They install side by side (different
+    // application ids), talk to their own backend, and use their own Bluetooth/Nearby namespace so
+    // test phones never carry real SOS traffic. Android forbids flavor names starting with "test",
+    // so the test environment's flavor is called "qa": `./gradlew installQaDebug`.
     flavorDimensions += "env"
     productFlavors {
         create("dev") {
@@ -26,25 +27,27 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             resValue("string", "app_name", "SOS Dev")
-            buildConfigField("String", "APP_ENV", "\"development\"")
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-dev.onrender.com\"")
+            buildConfigField("String", "APP_ENV", "\"dev\"")
+            // The backend on your computer: 10.0.2.2 is the host machine as seen from the Android
+            // emulator. On a real phone, change it in the app to http://<your computer's LAN IP>:8080.
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"http://10.0.2.2:8080\"")
             buildConfigField("String", "MESH_NAMESPACE", "\"DEV\"")
         }
-        create("testing") {
+        create("qa") {
             dimension = "env"
-            applicationIdSuffix = ".testing"
-            versionNameSuffix = "-testing"
-            resValue("string", "app_name", "SOS Testing")
-            buildConfigField("String", "APP_ENV", "\"testing\"")
-            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-testing.onrender.com\"")
-            buildConfigField("String", "MESH_NAMESPACE", "\"TESTING\"")
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            resValue("string", "app_name", "SOS Test")
+            buildConfigField("String", "APP_ENV", "\"test\"")
+            buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api-test.onrender.com\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"TEST\"")
         }
         create("prod") {
             dimension = "env"
             resValue("string", "app_name", "SaveOurSoul")
-            buildConfigField("String", "APP_ENV", "\"production\"")
+            buildConfigField("String", "APP_ENV", "\"prod\"")
             buildConfigField("String", "DEFAULT_BACKEND_URL", "\"https://saveoursoul-api.onrender.com\"")
-            buildConfigField("String", "MESH_NAMESPACE", "\"PRODUCTION\"")
+            buildConfigField("String", "MESH_NAMESPACE", "\"PROD\"")
         }
     }
 

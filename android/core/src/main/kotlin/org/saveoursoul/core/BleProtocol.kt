@@ -20,19 +20,19 @@ import java.util.UUID
  *  - CONFIRMED (read):  receipts this phone has collected, n × 24 bytes.
  */
 /**
- * Each environment gets its own radio namespace, so phones running a dev or testing build never
+ * Each environment gets its own radio namespace, so phones running a dev or test build never
  * exchange frames with production phones (a test phone would otherwise pick up a real pilgrim's
  * SOS and hand it to the wrong backend, which rejects it).
  */
 enum class MeshNamespace(val bleServiceUuid: UUID, val nearbyServiceId: String) {
-    PRODUCTION(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a0e"), "org.saveoursoul.sos.v1"),
-    TESTING(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a7e"), "org.saveoursoul.sos.v1.testing"),
+    PROD(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a0e"), "org.saveoursoul.sos.v1"),
+    TEST(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115a7e"), "org.saveoursoul.sos.v1.test"),
     DEV(UUID.fromString("5a0e5011-0000-4c8a-9f3e-5a0e50115ade"), "org.saveoursoul.sos.v1.dev"),
 }
 
 object BleProtocol {
     /** Production service UUID; see [MeshNamespace] for the other environments. */
-    val SERVICE_UUID: UUID = MeshNamespace.PRODUCTION.bleServiceUuid
+    val SERVICE_UUID: UUID = MeshNamespace.PROD.bleServiceUuid
     val INBOX_UUID: UUID = UUID.fromString("5a0e5011-0001-4c8a-9f3e-5a0e50115a0e")
     val OUTBOX_UUID: UUID = UUID.fromString("5a0e5011-0002-4c8a-9f3e-5a0e50115a0e")
     val ACKS_UUID: UUID = UUID.fromString("5a0e5011-0003-4c8a-9f3e-5a0e50115a0e")

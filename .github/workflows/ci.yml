@@ -45,7 +45,7 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       # ubuntu-latest ships an Android SDK and sets ANDROID_HOME, so :app is included.
-      # assembleDebug builds the dev, testing and prod variants.
+      # assembleDebug builds the dev, qa (APP_ENV=test) and prod variants.
       - run: ./gradlew --no-daemon :core:test :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
