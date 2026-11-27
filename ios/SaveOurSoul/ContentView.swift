@@ -24,6 +24,8 @@ struct ContentView: View {
                 }
                 if engine.isActive { ActiveSosView() } else { IdleSosView() }
                 ChannelsView()
+                // Below the SOS button on purpose: a first-time prompt must never push it down.
+                if !engine.isActive { AnalyticsConsentView() }
                 if !engine.enrolled { EnrollView() }
                 SettingsView()
             }
@@ -149,7 +151,6 @@ private struct ChannelsView: View {
             row("Internet (Wi-Fi / cellular)", engine.internet)
             row("SMS", engine.sms)
             row("Bluetooth relay (works in crowds, no internet needed)", engine.ble)
-            row("Nearby phones (Bluetooth / Wi-Fi)", engine.mesh)
             if engine.pendingFrames > 0 { Text("\(engine.pendingFrames) signal(s) queued for delivery").font(.caption) }
             if engine.relayedForOthers > 0 { Text("Relayed \(engine.relayedForOthers) SOS signal(s) for people nearby").font(.caption) }
         }
@@ -207,6 +208,7 @@ private struct EnrollView: View {
                         let (id, secret) = try await engine.backend.enroll(
                             name: name.isEmpty ? UIDevice.current.name : name, phone: phone, enrollToken: token.isEmpty ? nil : token)
                         try engine.didEnroll(deviceId: id, secret: secret)
+                        AppAnalytics.event("device_registered")
                     } catch {
                         self.error = "Registration failed: \(error.localizedDescription)"
                     }
@@ -227,6 +229,7 @@ private struct SettingsView: View {
     @State private var contacts = SosEngine.shared.settings.emergencyContacts.joined(separator: ", ")
     @State private var delay = String(SosEngine.shared.settings.smsFallbackDelaySec)
     @State private var relay = SosEngine.shared.settings.relayEnabled
+    @State private var analytics = AppAnalytics.consent == true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -242,9 +245,37 @@ private struct SettingsView: View {
                     engine.settings.relayEnabled = $0
                     engine.updateMeshRunning()
                 }
+            if AppAnalytics.available {
+                Toggle("Share anonymous usage statistics (never your location or messages)", isOn: $analytics)
+                    .onChange(of: analytics) { AppAnalytics.consent = $0 }
+            }
         }
         .textFieldStyle(.roundedBorder)
         .padding()
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// Asked once, only in builds that have Firebase configured. Nothing is collected before a "yes".
+private struct AnalyticsConsentView: View {
+    @State private var asked = AppAnalytics.consent != nil
+
+    var body: some View {
+        if !asked && AppAnalytics.available {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Help improve SaveOurSoul").bold()
+                Text("Share anonymous statistics such as which channel delivered an SOS and how long it took. Never your location, name, phone number or messages. You can change this in Settings.")
+                    .font(.footnote)
+                HStack {
+                    Button("Share statistics") { AppAnalytics.consent = true; asked = true }
+                        .buttonStyle(.borderedProminent)
+                    Button("No thanks") { AppAnalytics.consent = false; asked = true }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
     }
 }

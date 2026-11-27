@@ -34,7 +34,7 @@ spec is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 | `android/core/` | Pure Kotlin: frame codec, relay policy, persistent outbox. Unit-tested on the JVM. |
 | `android/app/` | Android app (Kotlin, Jetpack Compose, Nearby Connections, WorkManager). |
 | `ios/SOSCore/` | Swift package: frame codec, relay policy, persistent outbox. `swift test` checks the shared vectors. |
-| `ios/SaveOurSoul/` | iOS app (Swift, SwiftUI, Nearby Connections, Core Location, App Intents). |
+| `ios/SaveOurSoul/` | iOS app (Swift, SwiftUI, Core Bluetooth, Core Location, App Intents). |
 | `protocol/test-vectors.json` | Shared vectors that keep the Kotlin and TypeScript codecs byte-compatible. |
 
 ## Backend
@@ -119,8 +119,8 @@ The iOS app works like the Android one and speaks the same protocol. Where iOS b
 |---|---|---|
 | Internet | Tries every network, then forces cellular | One URLSession. iOS *Wi-Fi Assist* moves to cellular when Wi-Fi has no internet. Low Data Mode is ignored for SOS. |
 | SMS | Sent silently | iOS forbids silent SMS: a **pre-filled Messages sheet** opens and the user taps Send. Contacts are offered right away; the signed gateway frame is offered if the server hasn't confirmed within the delay. |
-| Mesh | Nearby Connections, also in the background | Nearby Connections with the **same service id and strategy**, so iPhones and Android phones relay each other's SOS. It runs while the app is open, and in the background while an SOS is active. |
-| Staying alive | Foreground service | Continuous background location during an SOS (blue status-bar pill). This keeps retries, location updates and the mesh running. |
+| Phone-to-phone | Bluetooth LE relay **and** Nearby Connections (Android↔Android, higher bandwidth) | Bluetooth LE relay only. It is the same protocol as Android, so iPhones and Android phones relay each other's SOS, and it also works in the background. |
+| Staying alive | Foreground service | Continuous background location during an SOS (blue status-bar pill). This keeps retries, location updates and the Bluetooth relay running. |
 | Store-and-forward | WorkManager every 15 min | `BGAppRefreshTask` backstop and `NWPathMonitor` (flush as soon as a network appears) |
 | Extra triggers | — | **Siri / Shortcuts / Action button / Back Tap** through the `Send SOS` App Intent |
 | Secret storage | Android Keystore (non-exportable HMAC key) | Keychain, `AfterFirstUnlockThisDeviceOnly`, so a locked phone can still sign |
@@ -131,16 +131,22 @@ The iOS app works like the Android one and speaks the same protocol. Where iOS b
   scanning, collecting and pushing SOS frames from the background. However, iOS hides a
   backgrounded iPhone's advert from Android phones. An iPhone *victim* should keep the SOS
   screen open (the app keeps the screen awake); when locked it still pushes its SOS to any
-  phone it sees advertising internet. Nearby Connections on iOS runs only in the foreground.
-* **iOS Nearby:** Google's Swift package is pulled from `github.com/google/nearby`. The
-  `NSBonjourServices` entry in `ios/project.yml` is worked out from the service id. Check it
-  against Google's iOS setup guide if Wi-Fi discovery doesn't find peers.
+  phone it sees advertising internet.
+* **No Nearby Connections on iOS:** Google's iOS Nearby package clashes with the Firebase SDK
+  (both ship an `openssl_grpc` target), it only worked in the foreground, and it was never
+  verified. iPhones use the Bluetooth LE relay, which covers iPhone↔Android.
 * **Google Play policy** limits `SEND_SMS`. Sideloaded and enterprise (MDM) builds are fine.
   For Play Store distribution you would need the policy exception or would have to fall back to
   `ACTION_SENDTO` (user taps send).
 * Nearby Connections needs Google Play services. On devices without them (e.g. some AOSP
   builds) the mesh channel is off; internet and SMS still work.
 * The relay foreground service costs some battery. Users can turn relay mode off in settings.
+
+## Analytics
+
+Both apps include **opt-in, anonymous** Firebase Analytics, with one Firebase project per
+environment. It never collects location or personal data, never affects an SOS, and builds
+without the Firebase config files simply run without it. See [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
 ## Hajj deployment (Arafat, Mina, Muzdalifah)
 

@@ -1,6 +1,5 @@
 import CoreLocation
 import Foundation
-import NearbyConnections
 import Network
 import SOSCore
 import UIKit
@@ -22,7 +21,7 @@ struct SmsRequest: Identifiable {
 /// Sends an SOS over every channel the iPhone has, the same way as the Android app:
 ///
 ///  1. The frame goes into a durable outbox before anything else.
-///  2. Internet (Wi-Fi, or cellular through Wi-Fi Assist) and the Nearby mesh fire at once.
+///  2. Internet (Wi-Fi, or cellular through Wi-Fi Assist) and the Bluetooth LE relay fire at once.
 ///  3. Contacts get a Messages sheet with a map link; if the backend hasn't confirmed within
 ///     the SMS delay, a second sheet sends the signed frame to the SMS gateway.
 ///  4. While active, location frames go out every 60 s and everything unconfirmed is retried,
@@ -42,7 +41,6 @@ final class SosEngine: ObservableObject {
     @Published private(set) var kind: SosKind = .general
     @Published private(set) var internet = ChannelState()
     @Published private(set) var sms = ChannelState()
-    @Published private(set) var mesh = ChannelState()
     @Published private(set) var ble = ChannelState()
     @Published private(set) var responderStatus: String?
     @Published private(set) var lastFix: CLLocation?
@@ -58,7 +56,6 @@ final class SosEngine: ObservableObject {
     let credentials = DeviceCredentials()
     private(set) lazy var backend = BackendClient { [settings] in settings.backendUrl }
     private let location = LocationProvider()
-    private let meshTransport = MeshTransport(namespace: AppEnvironment.meshNamespace)
     private let seen = SeenCache()
     private lazy var relayPolicy = RelayPolicy(seen: seen)
     private let outbox: Outbox
@@ -72,6 +69,8 @@ final class SosEngine: ObservableObject {
     private var flushing = false
     private var smsQueue: [SmsRequest] = []
     private var lastGatewaySmsAt = Date.distantPast
+    /** Analytics milestones already reported for the active alert, so each is counted once. */
+    private var reported: Set<String> = []
 
     private init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -79,9 +78,6 @@ final class SosEngine: ObservableObject {
         outbox = Outbox(url: dir.appendingPathComponent("outbox.json"))
         enrolled = credentials.isEnrolled
 
-        meshTransport.onPayload = { [weak self] id, data in self?.onFramesFromPeers(FrameCodec.split(data), source: "nearby:" + id) }
-        meshTransport.framesToShare = { [weak self] in self?.outbox.unconfirmed().map(\.frame) ?? [] }
-        meshTransport.onPeersChanged = { [weak self] n in self?.updateMeshState(peers: n) }
 
         // Retry the moment any network becomes usable.
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -125,7 +121,7 @@ final class SosEngine: ObservableObject {
     }
 
     func onBackground() {
-        // Nearby stops in the background unless an SOS keeps us alive; BLE carries on.
+        // BLE keeps relaying in the background; only the screen-awake setting changes.
         updateMeshRunning(foreground: false)
     }
 
@@ -142,6 +138,8 @@ final class SosEngine: ObservableObject {
             error = "This phone isn't registered with the SOS server, so only your contacts can be texted."
         }
         let alertId = UUID()
+        reported.removeAll()
+        AppAnalytics.event("sos_triggered", ["kind": String(describing: kind), "registered": credentials.isEnrolled])
         settings.activeAlertId = alertId
         settings.activeKind = kind
         settings.activeSince = Date()
@@ -162,6 +160,7 @@ final class SosEngine: ObservableObject {
     func cancel() {
         guard let alertId = settings.activeAlertId else { return }
         let kind = settings.activeKind
+        AppAnalytics.event("sos_cancelled", ["time_bucket": AppAnalytics.timeBucket(sinceActive)])
         settings.activeAlertId = nil
         activeLoop?.cancel()
         activeAlertId = nil
@@ -192,7 +191,6 @@ final class SosEngine: ObservableObject {
         _ = seen.firstSeen(frame.frameId) // ignore our own frame when peers echo it back
         outbox.add(bytes, own: true)
         if let fix { lastFix = fix }
-        meshTransport.broadcast([bytes])
         refreshPending()
         Task { await flush() }
         return bytes
@@ -221,6 +219,7 @@ final class SosEngine: ObservableObject {
     private func pollResponder(_ alertId: UUID) async {
         guard let status = await backend.alertStatus(alertId) else { return }
         responderStatus = status.status
+        if status.status == "acknowledged" || status.status == "resolved" { milestone("sos_\(status.status)") }
         if status.status == "resolved", settings.activeAlertId == alertId {
             settings.activeAlertId = nil
             activeLoop?.cancel()
@@ -266,6 +265,7 @@ final class SosEngine: ObservableObject {
                 error = "The server rejected the signal (\(rejected.reason ?? "?")). Re-register this phone."
             } else {
                 internet = ChannelState(health: .ok, detail: "delivered to server")
+                if settings.activeAlertId != nil { milestone("sos_delivered", ["channel": "internet"]) }
             }
             if let s = results.last(where: { $0.alertStatus != nil })?.alertStatus { responderStatus = s }
         } catch {
@@ -320,9 +320,13 @@ final class SosEngine: ObservableObject {
     func smsFinished(_ request: SmsRequest, sent: Bool) {
         switch request.purpose {
         case .gateway(let ids):
-            if sent { outbox.markSmsSent(ids) }
+            if sent {
+                outbox.markSmsSent(ids)
+                AppAnalytics.event("sos_sms_sent", ["to": "gateway"])
+            }
             sms = ChannelState(health: sent ? .ok : .failed, detail: sent ? "sent to SMS gateway" : "SMS not sent")
         case .contacts:
+            if sent { AppAnalytics.event("sos_sms_sent", ["to": "contacts"]) }
             sms = ChannelState(health: sent ? .ok : .failed, detail: sent ? "contacts texted" : "contacts not texted")
         }
         smsRequest = nil
@@ -340,7 +344,18 @@ final class SosEngine: ObservableObject {
 
     // MARK: - relay
 
-    /// Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload.
+    private var sinceActive: TimeInterval { Date().timeIntervalSince(settings.activeSince ?? Date()) }
+
+    /// Reports an SOS milestone once per alert, with the time since the SOS started.
+    private func milestone(_ event: String, _ params: [String: Any] = [:]) {
+        guard reported.insert(event).inserted else { return }
+        var p = params
+        p["kind"] = String(describing: settings.activeKind)
+        p["time_bucket"] = AppAnalytics.timeBucket(sinceActive)
+        AppAnalytics.event(event, p)
+    }
+
+    /// Frames from a nearby phone over Bluetooth LE: queue, pass on, upload.
     private func onFramesFromPeers(_ frames: [Data], source: String) {
         let fresh = frames.compactMap { raw -> Data? in
             guard case let .relay(frame) = relayPolicy.onFrameFromPeer(raw) else { return nil }
@@ -348,7 +363,7 @@ final class SosEngine: ObservableObject {
         }
         guard !fresh.isEmpty else { return }
         relayedForOthers += fresh.count
-        meshTransport.broadcast(fresh, except: source.hasPrefix("nearby:") ? String(source.dropFirst(7)) : nil)
+        AppAnalytics.event("relay_carried", ["frames": fresh.count, "via": String(source.prefix { $0 != ":" })])
         refreshPending()
         bleTransport.refresh()
         Task { await flush() }
@@ -368,6 +383,7 @@ final class SosEngine: ObservableObject {
         outbox.markConfirmed(accepted.map(\.frameId))
         accepted.forEach(ackLedger.add)
         if accepted.contains(where: { outbox.entry($0.frameId)?.own == true }) {
+            if settings.activeAlertId != nil { milestone("sos_delivered", ["channel": "bluetooth"]) }
             ble = ChannelState(health: .ok, detail: "delivered through a nearby phone")
         }
         refreshPending()
@@ -375,8 +391,6 @@ final class SosEngine: ObservableObject {
     }
 
     func updateMeshRunning(foreground: Bool = true) {
-        if isActive || (settings.relayEnabled && foreground) { meshTransport.start() } else { meshTransport.stop() }
-        updateMeshState(peers: nil)
         // BLE keeps working in the background (bluetooth-central/peripheral modes), so relay mode
         // keeps it on even when the app is not open.
         if isActive || settings.relayEnabled {
@@ -392,18 +406,6 @@ final class SosEngine: ObservableObject {
         // Android phones only see an iPhone's BLE advert while the app is in the foreground:
         // keep the screen awake while an SOS is active and the app is open.
         UIApplication.shared.isIdleTimerDisabled = isActive && foreground
-    }
-
-    private func updateMeshState(peers: Int?) {
-        if !meshTransport.running {
-            mesh = ChannelState(health: .idle, detail: "off")
-        } else if let peers, peers > 0 {
-            mesh = ChannelState(health: .ok, detail: "\(peers) phone(s) nearby")
-        } else if peers == nil, mesh.health == .ok {
-            return
-        } else {
-            mesh = ChannelState(health: .working, detail: "searching for nearby phones…")
-        }
     }
 
     private func refreshPending() { pendingFrames = outbox.unconfirmed().count }

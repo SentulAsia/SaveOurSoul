@@ -2,6 +2,14 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // Reads src/<flavor>/google-services.json (one Firebase project per environment).
+    id("com.google.gms.google-services")
+}
+
+// The Firebase config files are not committed. Builds without them (CI, new developers) still
+// work; analytics is simply unavailable at run time.
+googleServices {
+    missingGoogleServicesStrategy = com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy.WARN
 }
 
 android {
@@ -89,4 +97,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+
+    // Firebase Analytics: opt-in only, never on the SOS path (see docs/ANALYTICS.md).
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-analytics")
 }

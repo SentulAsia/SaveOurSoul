@@ -13,6 +13,11 @@ class Settings(context: Context) {
         get() = prefs.getString("backend_url", BuildConfig.DEFAULT_BACKEND_URL)!!
         set(v) = prefs.edit { putString("backend_url", v.trim().trimEnd('/')) }
 
+    /** Anonymous usage statistics: null = not asked yet, then the user's explicit choice (opt-in). */
+    var analyticsConsent: Boolean?
+        get() = if (prefs.contains("analytics_consent")) prefs.getBoolean("analytics_consent", false) else null
+        set(v) = prefs.edit { if (v == null) remove("analytics_consent") else putBoolean("analytics_consent", v) }
+
     /** Name used in texts to emergency contacts. */
     var userName: String
         get() = prefs.getString("user_name", "")!!

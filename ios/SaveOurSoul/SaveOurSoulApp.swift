@@ -9,6 +9,7 @@ struct SaveOurSoulApp: App {
     @StateObject private var engine = SosEngine.shared
 
     init() {
+        AppAnalytics.configure()
         // Store-and-forward backstop: iOS wakes us now and then to upload queued frames
         // (our own, or ones relayed for strangers) once the phone is back online.
         BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.flushTask, using: nil) { task in

@@ -54,6 +54,8 @@ class SosEngine(
     private val location: LocationProvider,
     private val outbox: Outbox,
     private val seen: SeenCache,
+    /** Opt-in, anonymous; never on the SOS path (see Analytics.kt). */
+    val analytics: Analytics,
 ) {
     enum class Health { IDLE, WORKING, OK, FAILED }
 
@@ -82,6 +84,8 @@ class SosEngine(
     private val flushLock = Mutex()
     private var activeLoop: Job? = null
     private var lastSmsAt = 0L
+    /** Analytics milestones already reported for the active alert, so each is counted once. */
+    private val reported: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
     private val acks = AckLedger()
     private val rotation = OutboxRotation()
@@ -170,6 +174,8 @@ class SosEngine(
             _state.update { it.copy(error = "Device not registered with the SOS server yet — sending to contacts by SMS only.") }
         }
         val alertId = UUID.randomUUID()
+        reported.clear()
+        analytics.event("sos_triggered", "kind" to kind.name.lowercase(), "registered" to credentials.isEnrolled)
         settings.activeAlertId = alertId
         settings.activeKind = kind
         settings.activeSince = now()
@@ -189,6 +195,7 @@ class SosEngine(
     fun cancel() {
         val alertId = settings.activeAlertId ?: return
         val kind = settings.activeKind
+        analytics.event("sos_cancelled", "time_bucket" to Analytics.timeBucket(now() - settings.activeSince))
         settings.activeAlertId = null
         activeLoop?.cancel()
         _state.update { it.copy(activeAlertId = null, responderStatus = "cancelled") }
@@ -239,6 +246,7 @@ class SosEngine(
             f.copy(flags = f.flags or FrameFlags.HAS_LOCATION, latE7 = (it.latitude * 1e7).toInt(), lonE7 = (it.longitude * 1e7).toInt())
         } ?: f
         val sent = sms.notifyContacts(contacts, withFix, settings.userName.ifBlank { "a SaveOurSoul user" })
+        if (sent > 0) analytics.event("sos_sms_sent", "to" to "contacts", "cancel" to cancel)
         _state.update { it.copy(sms = ChannelState(if (sent > 0) Health.OK else Health.FAILED, "$sent/${contacts.size} contacts texted")) }
     }
 
@@ -263,6 +271,7 @@ class SosEngine(
         if (!internet.hasAnyInternet()) return
         val status = backend.alertStatus(alertId) ?: return
         _state.update { it.copy(responderStatus = status.status) }
+        if (status.status == "acknowledged" || status.status == "resolved") milestone("sos_${status.status}")
         if (status.status == "resolved" && settings.activeAlertId == alertId) {
             settings.activeAlertId = null
             activeLoop?.cancel()
@@ -300,6 +309,7 @@ class SosEngine(
         entries.zip(delivery.results).forEach { (e, r) -> r.receipt?.let { acks.add(Ack(e.frameId, it)) } }
         if (relayId != null) return
         val rejected = delivery.results.firstOrNull { it.status == "rejected" }
+        if (rejected == null && settings.activeAlertId != null) milestone("sos_delivered", "channel" to "internet", "network" to delivery.via)
         val alertStatus = delivery.results.lastOrNull { it.alertStatus != null }?.alertStatus
         _state.update {
             it.copy(
@@ -329,6 +339,7 @@ class SosEngine(
         _state.update { it.copy(sms = ChannelState(Health.WORKING, "texting SMS gateway…")) }
         val ok = toSend.count { sms.sendFrame(gateway, it.frame) }
         if (ok > 0) {
+            analytics.event("sos_sms_sent", "to" to "gateway")
             lastSmsAt = now
             val sentAlerts = toSend.map { FrameCodec.decode(it.frame).alertId }.toSet()
             outbox.markSmsSent(due.filter { FrameCodec.decode(it.frame).alertId in sentAlerts }.map { it.frameId })
@@ -339,6 +350,13 @@ class SosEngine(
     }
 
     // --- relay --------------------------------------------------------------------------------
+
+    /** Reports an SOS milestone once per alert, with the time since the SOS started. */
+    private fun milestone(event: String, vararg params: Pair<String, Any>) {
+        if (!reported.add(event)) return
+        val elapsed = Analytics.timeBucket(now() - settings.activeSince)
+        analytics.event(event, "kind" to settings.activeKind.name.lowercase(), "time_bucket" to elapsed, *params)
+    }
 
     /** Frames from a nearby phone (Nearby Connections or BLE): queue, pass on, upload. */
     private fun onFramesFromPeers(frames: List<ByteArray>, source: String) {
@@ -351,6 +369,7 @@ class SosEngine(
         if (fresh.isEmpty()) return
         Log.i(TAG, "relaying ${fresh.size} frame(s) from $source")
         _state.update { it.copy(relayedForOthers = it.relayedForOthers + fresh.size) }
+        analytics.event("relay_carried", "frames" to fresh.size, "via" to source.substringBefore(':'))
         mesh.broadcast(fresh, exceptEndpoint = source.removePrefix("nearby:"))
         refreshPending()
         ble.refresh()
@@ -372,6 +391,7 @@ class SosEngine(
         outbox.markConfirmed(confirmed.map { it.frameId })
         confirmed.forEach(acks::add)
         if (confirmed.any { outbox.get(it.frameId)?.own == true }) {
+            if (settings.activeAlertId != null) milestone("sos_delivered", "channel" to "bluetooth")
             _state.update { it.copy(ble = ChannelState(Health.OK, "delivered through a nearby phone")) }
         }
         refreshPending()

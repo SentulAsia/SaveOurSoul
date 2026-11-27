@@ -12,3 +12,7 @@ ios/SOSCore/.build/
 ios/SaveOurSoul/Info.plist
 xcuserdata/
 .kotlin/
+# Firebase config: one per environment, kept out of the public repo (see docs/ANALYTICS.md).
+android/app/src/*/google-services.json
+android/app/google-services.json
+ios/Firebase/*/GoogleService-Info.plist
